@@ -1,0 +1,208 @@
+import { computed, reactive, ref, type ComputedRef, type Ref } from "vue";
+import type { ApiClient } from "./api.ts";
+import type { OverlayOptions } from "../options.ts";
+import type { Comment, Thread } from "./types.ts";
+
+export type Mode = "idle" | "inspecting";
+
+export type StickynoteStore = {
+  options: OverlayOptions;
+  api: ApiClient;
+  active: Ref<boolean>;
+  panelOpen: Ref<boolean>;
+  showResolved: Ref<boolean>;
+  mode: Ref<Mode>;
+  currentRoute: Ref<string>;
+  threads: Ref<Thread[]>;
+  commentsByThread: Record<string, Comment[]>;
+  openThreadId: Ref<string | null>;
+  // PLAN 5.4: identify the signed-in user so own-comment edit/delete checks
+  // can compare against the verified identity rather than guessing.
+  me: Ref<{ sub: string; name: string } | null>;
+  threadsForCurrentRoute: ComputedRef<Thread[]>;
+  toggleActive: () => void;
+  setMode: (m: Mode) => void;
+  refreshThreads: () => Promise<void>;
+  loadComments: (threadId: string) => Promise<void>;
+  openThread: (id: string | null) => Promise<void>;
+  toggleResolved: (thread: Thread) => Promise<void>;
+  createThread: (
+    input: Omit<Parameters<ApiClient["createThread"]>[0], "route" | "url">,
+  ) => Promise<Thread>;
+  reply: (threadId: string, body: string) => Promise<void>;
+  editComment: (id: string, body: string) => Promise<void>;
+  deleteComment: (id: string) => Promise<void>;
+};
+
+export function createStore(options: OverlayOptions, api: ApiClient): StickynoteStore {
+  const active = ref(false);
+  const panelOpen = ref(false);
+  const showResolved = ref(false);
+  const mode = ref<Mode>("idle");
+  const currentRoute = ref(currentPath());
+  const threads = ref<Thread[]>([]);
+  const commentsByThread = reactive<Record<string, Comment[]>>({});
+  const openThreadId = ref<string | null>(null);
+  const me = ref<{ sub: string; name: string } | null>(null);
+
+  trackRouteChanges((path) => {
+    currentRoute.value = path;
+    void refreshThreads();
+  });
+
+  async function loadMe(): Promise<void> {
+    if (me.value) return;
+    me.value = await api.me();
+  }
+
+  const threadsForCurrentRoute = computed(() =>
+    threads.value.filter((t) => t.route === currentRoute.value),
+  );
+
+  async function refreshThreads(): Promise<void> {
+    threads.value = await api.listThreads({
+      includeResolved: showResolved.value,
+    });
+  }
+
+  async function loadComments(threadId: string): Promise<void> {
+    commentsByThread[threadId] = await api.listComments(threadId);
+  }
+
+  async function openThread(id: string | null): Promise<void> {
+    openThreadId.value = id;
+    if (id) {
+      panelOpen.value = true;
+      await loadComments(id);
+    }
+  }
+
+  async function toggleResolved(thread: Thread): Promise<void> {
+    const next = thread.status === "open" ? "resolved" : "open";
+    const updated = await api.setStatus(thread.id, next);
+    if (updated) {
+      const i = threads.value.findIndex((t) => t.id === thread.id);
+      if (i >= 0) threads.value.splice(i, 1, updated);
+    }
+    await refreshThreads();
+  }
+
+  async function createThread(
+    input: Omit<Parameters<ApiClient["createThread"]>[0], "route" | "url">,
+  ): Promise<Thread> {
+    const result = await api.createThread({
+      ...input,
+      route: currentRoute.value,
+      url: window.location.href,
+    });
+    threads.value = [result.thread, ...threads.value];
+    commentsByThread[result.thread.id] = result.comments;
+    return result.thread;
+  }
+
+  async function reply(threadId: string, body: string): Promise<void> {
+    const c = await api.createReply(threadId, body);
+    if (!c) return;
+    const list = commentsByThread[threadId] ?? [];
+    commentsByThread[threadId] = [...list, c];
+  }
+
+  async function editComment(id: string, body: string): Promise<void> {
+    const c = await api.editComment(id, body);
+    if (!c) return;
+    const list = commentsByThread[c.thread_id] ?? [];
+    commentsByThread[c.thread_id] = list.map((x) => (x.id === id ? c : x));
+  }
+
+  async function deleteComment(id: string): Promise<void> {
+    const result = await api.deleteComment(id);
+    if (result.thread_deleted) {
+      // Head-comment removal cascades; reflect locally.
+      const target = Object.entries(commentsByThread).find(([, list]) =>
+        list.some((x) => x.id === id),
+      );
+      if (target) {
+        const [tid] = target;
+        threads.value = threads.value.filter((t) => t.id !== tid);
+        delete commentsByThread[tid];
+        if (openThreadId.value === tid) openThreadId.value = null;
+      }
+      return;
+    }
+    if (result.comment) {
+      const c = result.comment;
+      const list = commentsByThread[c.thread_id] ?? [];
+      commentsByThread[c.thread_id] = list.map((x) => (x.id === id ? c : x));
+    }
+  }
+
+  function toggleActive(): void {
+    active.value = !active.value;
+    if (active.value) {
+      void loadMe();
+      void refreshThreads();
+    } else {
+      mode.value = "idle";
+      openThreadId.value = null;
+    }
+  }
+
+  function setMode(m: Mode): void {
+    mode.value = m;
+  }
+
+  return {
+    options,
+    api,
+    active,
+    panelOpen,
+    showResolved,
+    mode,
+    currentRoute,
+    threads,
+    commentsByThread,
+    openThreadId,
+    me,
+    threadsForCurrentRoute,
+    toggleActive,
+    setMode,
+    refreshThreads,
+    loadComments,
+    openThread,
+    toggleResolved,
+    createThread,
+    reply,
+    editComment,
+    deleteComment,
+  };
+}
+
+function currentPath(): string {
+  return window.location.pathname;
+}
+
+// Host apps drive routes through history.pushState/replaceState which never
+// fire popstate. Wrap them so we can react. Idempotent and harmless if the
+// host overrides them again.
+function trackRouteChanges(onChange: (path: string) => void): void {
+  let last = currentPath();
+  const emit = () => {
+    const next = currentPath();
+    if (next !== last) {
+      last = next;
+      onChange(next);
+    }
+  };
+  for (const key of ["pushState", "replaceState"] as const) {
+    const orig = history[key].bind(history);
+    type Wrapped = (...args: unknown[]) => unknown;
+    (history as unknown as Record<string, Wrapped>)[key] = function patched(
+      ...args: unknown[]
+    ): unknown {
+      const result = (orig as unknown as Wrapped)(...args);
+      queueMicrotask(emit);
+      return result;
+    };
+  }
+  window.addEventListener("popstate", emit);
+}

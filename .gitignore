@@ -25,3 +25,7 @@ dist-ssr
 
 # AI agent worktrees
 .claude/worktrees/
+
+# Cloudflare wrangler local state and build artifacts
+.wrangler/
+.dev.vars

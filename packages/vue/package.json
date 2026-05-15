@@ -1,23 +1,21 @@
 {
-  "name": "vue",
+  "name": "vite-plugin-stickynote",
   "version": "0.0.0",
-  "description": "A starter for creating a TypeScript package.",
-  "homepage": "https://github.com/author/library#readme",
-  "bugs": {
-    "url": "https://github.com/author/library/issues"
-  },
+  "description": "In-app comment overlay for Vue dev environments — pin coordinates, threads, and replies, persisted via a Cloudflare Worker + D1.",
   "license": "MIT",
-  "author": "Author Name <author.name@mail.com>",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/author/library.git"
-  },
   "files": [
     "dist"
   ],
   "type": "module",
   "exports": {
-    ".": "./dist/index.mjs",
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./runtime/overlay": {
+      "types": "./dist/runtime/overlay.d.mts",
+      "import": "./dist/runtime/overlay.mjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -26,15 +24,22 @@
   "scripts": {
     "build": "vp pack",
     "dev": "vp pack --watch",
-    "test": "vp test",
     "check": "vp check",
     "prepublishOnly": "vp run build"
   },
+  "dependencies": {
+    "vite-plugin-vue-inspector": "^6.0.0",
+    "vue": "^3.5.13"
+  },
   "devDependencies": {
-    "@types/node": "^25.6.2",
-    "@typescript/native-preview": "7.0.0-dev.20260509.2",
-    "bumpp": "^11.1.0",
-    "typescript": "^6.0.3",
-    "vite-plus": "^0.1.20"
+    "@tsdown/css": "^0.22.0",
+    "@types/node": "catalog:",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "vite": "^5.0.0 || ^6.0.0 || ^7.0.0"
   }
 }

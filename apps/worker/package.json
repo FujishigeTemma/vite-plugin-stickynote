@@ -1,0 +1,22 @@
+{
+  "name": "worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "cf-typegen": "wrangler types",
+    "db:migrate:local": "wrangler d1 migrations apply stickynote --local",
+    "db:reset:local": "rm -rf .wrangler/state/v3/d1 && wrangler d1 migrations apply stickynote --local"
+  },
+  "dependencies": {
+    "hono": "^4.6.14",
+    "jose": "^5.9.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251211.0",
+    "typescript": "catalog:",
+    "wrangler": "^3.114.17"
+  }
+}
