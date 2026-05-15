@@ -4,9 +4,9 @@ import {
   ancestorsWithInspector,
   buildGithubUrl,
   componentName,
-  fallbackToVueParent,
   findOccurrenceIndex,
   getInspectorData,
+  nearestComponentRoot,
   parseInspector,
 } from "../inspector.ts";
 import { useStore } from "../store-inject.ts";
@@ -47,25 +47,18 @@ let lastEvent: MouseEvent | null = null;
 let altDepth = 0;
 let rafQueued = false;
 
-function shouldIgnore(el: Element | null): boolean {
-  let n: Element | null = el;
-  while (n) {
-    if (n.id === "stickynote-overlay-root") return true;
-    n = n.parentElement;
-  }
-  return false;
+function shouldIgnore(el: Element): boolean {
+  return el.id === "stickynote-overlay-root";
 }
 
 function pickTarget(e: MouseEvent): Element | null {
   for (const node of e.composedPath()) {
     if (!(node instanceof Element)) continue;
     if (shouldIgnore(node)) return null;
-    const el = fallbackToVueParent(node) ?? (getInspectorData(node) ? node : null);
-    if (el) {
-      // Walk up by altDepth.
-      const chain = ancestorsWithInspector(el);
-      return chain[Math.min(altDepth, chain.length - 1)] ?? el;
-    }
+    const root = nearestComponentRoot(node);
+    if (!root) continue;
+    const chain = ancestorsWithInspector(root);
+    return chain[Math.min(altDepth, chain.length - 1)] ?? root;
   }
   return null;
 }
@@ -120,7 +113,8 @@ function onKey(e: KeyboardEvent): void {
 
 function onClickCapture(e: MouseEvent): void {
   // Ignore clicks inside our own overlay (panel, statusbar, composer).
-  if (e.target instanceof Element && shouldIgnore(e.target)) return;
+  // composedPath crosses the shadow boundary, so we'll see our host id.
+  if (e.composedPath().some((n) => n instanceof Element && shouldIgnore(n))) return;
   e.preventDefault();
   e.stopPropagation();
   const target = pickTarget(e);

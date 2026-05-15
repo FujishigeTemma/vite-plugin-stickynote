@@ -1,20 +1,14 @@
-// DOM-side helpers for finding the Vue component under a point and reading
-// its source location. Mirrors vite-plugin-vue-inspector's lookup so results
-// stay consistent across hover-highlight and pin-restore.
+// Locate the Vue component for a DOM element via the `data-v-inspector`
+// attribute injected by vite-plugin-vue-inspector. The plugin is configured
+// with cleanHtml:false so every component root carries the attribute on the
+// rendered DOM — no Vue private API access needed.
 
-const KEY_DATA_ATTR = "data-v-inspector";
-const KEY_PROPS = "__v_inspector";
+import type { Thread } from "./types.ts";
 
-type ElWithVnode = Element & {
-  __vnode?: {
-    props?: Record<string | symbol, unknown>;
-    ctx?: { vnode?: { props?: Record<string | symbol, unknown>; el?: Node } };
-  };
-  __vueParentComponent?: { vnode?: { el?: Node } };
-};
+const ATTR = "data-v-inspector";
+const SELECTOR = `[${ATTR}]`;
 
 export type InspectorInfo = {
-  // "src/components/HeroCard.vue:6:3"
   raw: string;
   path: string;
   line: number;
@@ -22,16 +16,7 @@ export type InspectorInfo = {
 };
 
 export function getInspectorData(el: Element | null): string | null {
-  if (!el) return null;
-  const e = el as ElWithVnode;
-  const direct = e.__vnode?.props?.[KEY_PROPS];
-  if (typeof direct === "string") return direct;
-  const ctx = e.__vnode?.ctx?.vnode;
-  if (ctx?.el === el) {
-    const v = ctx.props?.[KEY_PROPS];
-    if (typeof v === "string") return v;
-  }
-  return e.getAttribute?.(KEY_DATA_ATTR) ?? null;
+  return el?.getAttribute(ATTR) ?? null;
 }
 
 export function parseInspector(raw: string | null): InspectorInfo | null {
@@ -46,56 +31,55 @@ export function parseInspector(raw: string | null): InspectorInfo | null {
   };
 }
 
-// Walk up DOM ancestors and return all elements that carry inspector data.
-// The first entry is the deepest component; index N moves up the tree.
+// Nearest enclosing component root for any element (including text nodes'
+// parents and bare HTML). Returns null if no inspector-tagged ancestor exists.
+export function nearestComponentRoot(el: Element | null): Element | null {
+  return el?.closest(SELECTOR) ?? null;
+}
+
+// All component-root ancestors, deepest first. Used by Alt-key parent walk.
 export function ancestorsWithInspector(start: Element): Element[] {
   const out: Element[] = [];
-  let el: Element | null = start;
-  while (el && el !== document.documentElement) {
-    if (getInspectorData(el)) out.push(el);
-    el = el.parentElement;
+  let el: Element | null = start.closest(SELECTOR);
+  while (el) {
+    out.push(el);
+    el = el.parentElement?.closest(SELECTOR) ?? null;
   }
   return out;
 }
 
-// Fallback for non-Vue elements: walk up Vue's component tree until we
-// find a component-root DOM element.
-export function fallbackToVueParent(el: Element | null): Element | null {
-  if (!el) return null;
-  if (getInspectorData(el)) return el;
-  let inst = (el as ElWithVnode).__vueParentComponent;
-  while (inst) {
-    const root = inst.vnode?.el;
-    if (root instanceof Element && getInspectorData(root)) return root;
-    inst = (inst as { parent?: typeof inst }).parent;
-  }
-  return null;
-}
-
-// When a component is rendered N times (lists, etc.), file:line is not
-// unique. Add the document-order index of the matched element among
-// siblings with the same inspector data so we can re-find it later.
+// When a component renders N times (lists), file:line is not unique.
+// Record the document-order index among matches so we can re-find it.
 export function findOccurrenceIndex(target: Element, data: string): number {
-  let idx = -1;
-  let count = 0;
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-  let node = walker.nextNode();
-  while (node) {
-    const el = node as Element;
-    if (getInspectorData(el) === data) {
-      if (el === target) idx = count;
-      count++;
-    }
-    node = walker.nextNode();
+  // Attribute-value selector. data is "path:line:col" — safe to embed via
+  // CSS.escape since paths can contain characters that need quoting.
+  const all = document.querySelectorAll(`[${ATTR}="${CSS.escape(data)}"]`);
+  for (let i = 0; i < all.length; i++) {
+    if (all[i] === target) return i;
   }
-  return idx === -1 ? 0 : idx;
+  return 0;
 }
 
-import type { Thread } from "./types.ts";
-
-// Map from "path:line" → all matching DOM elements in document order.
-// Built once per tick by the overlay cache; pins/lists look up by key.
+// Map from "path:line" → component-root elements in document order. Built
+// once per DOM-change tick so pins can look up their anchor without a fresh
+// tree walk each time.
 export type ElementMap = Map<string, Element[]>;
+
+export function buildElementMap(): ElementMap {
+  const map: ElementMap = new Map();
+  const all = document.querySelectorAll(SELECTOR);
+  for (const el of all) {
+    const raw = el.getAttribute(ATTR);
+    if (!raw) continue;
+    // Drop the column from "path:line:col" — pins identify by path:line.
+    const lastColon = raw.lastIndexOf(":");
+    const key = lastColon === -1 ? raw : raw.slice(0, lastColon);
+    const list = map.get(key);
+    if (list) list.push(el);
+    else map.set(key, [el]);
+  }
+  return map;
+}
 
 export function findElementInMap(
   map: ElementMap,
@@ -108,8 +92,6 @@ export function findElementInMap(
   return matches[index] ?? matches[0] ?? null;
 }
 
-// A thread is stale when its anchor component is no longer in the DOM.
-// Page-wide threads (no path/line) can never be stale.
 export function isThreadStale(thread: Thread, elementMap: ElementMap): boolean {
   if (thread.component_path == null || thread.component_line == null) return false;
   return (
@@ -122,14 +104,11 @@ export function isThreadStale(thread: Thread, elementMap: ElementMap): boolean {
   );
 }
 
-// Friendly component name from a path: "src/components/HeroCard.vue" → "HeroCard"
 export function componentName(path: string): string {
   const base = path.split("/").pop() ?? path;
   return base.replace(/\.[^.]+$/, "");
 }
 
-// Build a link to GitHub blob view for a thread. Returns null when we don't
-// have enough information (no repo configured, or commit unknown).
 export function buildGithubUrl(
   repo: string | null,
   commitHash: string,

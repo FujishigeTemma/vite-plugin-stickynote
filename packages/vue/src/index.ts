@@ -1,33 +1,21 @@
 import { execSync } from "node:child_process";
 import type { Plugin, PluginOption } from "vite";
-import * as VueInspectorMod from "vite-plugin-vue-inspector";
+import { inspectorTransform } from "./inspector-transform.ts";
 import type { OverlayOptions, StickynoteOptions } from "./options.ts";
 
 export type { OverlayOptions, StickynoteOptions } from "./options.ts";
 
-// vite-plugin-vue-inspector ships only a CJS-flavored .d.ts; under
-// nodenext + verbatimModuleSyntax the default export resolves to a namespace.
-// Normalize both ESM-default and CJS-namespace shapes here.
-type VueInspectorFn = (options?: { enabled?: boolean }) => PluginOption;
-const vueInspector: VueInspectorFn = ((VueInspectorMod as { default?: unknown }).default ??
-  VueInspectorMod) as VueInspectorFn;
-
 export default function stickynote(options: StickynoteOptions): PluginOption {
   const meta = readGitMeta();
-  return [
-    // vite-plugin-vue-inspector is required for component identification.
-    // Bundle it structurally so consumers cannot forget it.
-    vueInspector({ enabled: true }),
-    overlayPlugin(options, meta),
-  ];
+  return [inspectorTransform(), overlayPlugin(options, meta)];
 }
 
-// Virtual module the consumer's browser imports. Putting the mount call
-// behind a virtual module (instead of an inline `<script>` with a bare
-// specifier) lets Vite resolve and pre-bundle "vite-plugin-stickynote/runtime/
-// overlay" through its normal pipeline — inline bare imports never resolve
-// in the browser. We avoid the `\0` resolved-id convention because URL
-// round-tripping for `__x00`-prefixed ids is brittle across Vite versions.
+// Vite's standard virtual module convention. `\0` marks the id as
+// plugin-owned so other plugins skip it; Vite serves it through `/@id/__x00...`
+// in the browser, with the bare specifier inside resolved by Vite's normal
+// module pipeline. Inlining the script body instead would bypass that
+// pipeline and the bare specifier would leak to the browser unresolved.
+const RESOLVED_ID = "\0virtual:stickynote-mount.js";
 const VIRTUAL_ID = "virtual:stickynote-mount.js";
 
 function overlayPlugin(opts: StickynoteOptions, meta: { commit: string; dirty: boolean }): Plugin {
@@ -35,11 +23,10 @@ function overlayPlugin(opts: StickynoteOptions, meta: { commit: string; dirty: b
     name: "vite-plugin-stickynote",
     apply: "serve",
     resolveId(id) {
-      if (id === VIRTUAL_ID || id.endsWith(VIRTUAL_ID)) return VIRTUAL_ID;
-      return null;
+      return id === VIRTUAL_ID ? RESOLVED_ID : null;
     },
     load(id) {
-      if (id !== VIRTUAL_ID) return null;
+      if (id !== RESOLVED_ID) return null;
       const init: OverlayOptions = {
         apiUrl: stripTrailingSlash(opts.apiUrl),
         githubRepo: opts.githubRepo ?? null,
@@ -56,7 +43,7 @@ function overlayPlugin(opts: StickynoteOptions, meta: { commit: string; dirty: b
       return [
         {
           tag: "script",
-          attrs: { type: "module", src: `/@id/${VIRTUAL_ID}` },
+          attrs: { type: "module", src: `/@id/__x00__${VIRTUAL_ID}` },
           injectTo: "body",
         },
       ];

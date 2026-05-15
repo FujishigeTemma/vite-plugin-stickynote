@@ -1,7 +1,6 @@
-// All overlay CSS lives here as a single string. Injected into a <style>
-// element in document.head once on mount. Avoids Vue SFC <style> extraction
-// during pack (which would split CSS into a separate file the consumer would
-// have to load manually).
+// All overlay CSS lives here as a single string and is injected into the
+// overlay's Shadow DOM. Avoids Vue SFC <style> extraction during pack (which
+// would split CSS into a separate file the consumer would have to load).
 export const OVERLAY_CSS = `
 .sn-root, .sn-root * {
   box-sizing: border-box;

@@ -1,8 +1,8 @@
 import { ref, type InjectionKey, type Ref } from "vue";
-import { getInspectorData, type ElementMap } from "./inspector.ts";
+import { buildElementMap, type ElementMap } from "./inspector.ts";
 
-export const TICK_KEY: InjectionKey<Ref<number>> = Symbol.for("stickynote:tick");
-export const ELEMENT_MAP_KEY: InjectionKey<Ref<ElementMap>> = Symbol.for("stickynote:elements");
+export const TICK_KEY: InjectionKey<Ref<number>> = Symbol("stickynote:tick");
+export const ELEMENT_MAP_KEY: InjectionKey<Ref<ElementMap>> = Symbol("stickynote:elements");
 
 export type OverlayCache = {
   tick: Ref<number>;
@@ -11,8 +11,8 @@ export type OverlayCache = {
   stop: () => void;
 };
 
-// Centralizes DOM-watch wiring so we do a single tree walk per layout
-// event instead of one walk per pin per tick.
+// Centralizes DOM-watch wiring so we do one `querySelectorAll` per DOM
+// change instead of N tree walks per tick.
 export function createOverlayCache(): OverlayCache {
   const tick = ref(0);
   const elementMap = ref<ElementMap>(new Map());
@@ -23,22 +23,7 @@ export function createOverlayCache(): OverlayCache {
   let ro: ResizeObserver | null = null;
 
   function rebuildMap(): void {
-    const map: ElementMap = new Map();
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-    let node = walker.nextNode();
-    while (node) {
-      const el = node as Element;
-      const data = getInspectorData(el);
-      if (data) {
-        const lastColon = data.lastIndexOf(":");
-        const key = lastColon === -1 ? data : data.slice(0, lastColon);
-        const list = map.get(key);
-        if (list) list.push(el);
-        else map.set(key, [el]);
-      }
-      node = walker.nextNode();
-    }
-    elementMap.value = map;
+    elementMap.value = buildElementMap();
   }
 
   function bumpPosition(): void {
