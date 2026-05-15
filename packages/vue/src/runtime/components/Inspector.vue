@@ -1,26 +1,24 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive } from "vue";
+import { hideHighlight, removeHighlight, showHighlight } from "../highlight.ts";
 import {
-  ancestorsWithInspector,
   buildGithubUrl,
   componentName,
   findOccurrenceIndex,
-  getInspectorData,
-  nearestComponentRoot,
   parseInspector,
 } from "../inspector.ts";
 import { useStore } from "../store-inject.ts";
+import {
+  ancestorChain,
+  findInstance,
+  type Instance,
+  instanceInspector,
+  instanceName,
+  instanceRect,
+} from "../vue-instance.ts";
 
 const store = useStore();
 
-type Highlight = {
-  rect: { left: number; top: number; width: number; height: number };
-  inspector: { path: string; line: number; column: number };
-  componentName: string;
-  githubUrl: string | null;
-};
-
-const highlight = ref<Highlight | null>(null);
 const composer = reactive<{
   visible: boolean;
   body: string;
@@ -45,96 +43,148 @@ const composer = reactive<{
 
 let lastEvent: MouseEvent | null = null;
 let altDepth = 0;
-let rafQueued = false;
+let shiftHeld = false;
 
-function shouldIgnore(el: Element): boolean {
-  return el.id === "stickynote-overlay-root";
+const HOST_ID = "stickynote-overlay-root";
+
+function eventInOverlay(e: MouseEvent): boolean {
+  return e.composedPath().some((n) => n instanceof Element && n.id === HOST_ID);
 }
 
-function pickTarget(e: MouseEvent): Element | null {
-  for (const node of e.composedPath()) {
-    if (!(node instanceof Element)) continue;
-    if (shouldIgnore(node)) return null;
-    const root = nearestComponentRoot(node);
-    if (!root) continue;
-    const chain = ancestorsWithInspector(root);
-    return chain[Math.min(altDepth, chain.length - 1)] ?? root;
-  }
-  return null;
+// Resolve the Vue component owning the hovered DOM element. Walks up via
+// `__vueParentComponent` per PLAN §7.9 so non-Vue elements (text, bare divs)
+// fall back to their nearest owning component. Then climbs `parent` by
+// altDepth so Alt walks outward.
+function pickInstance(e: MouseEvent): Instance | null {
+  const target = e.target;
+  if (!(target instanceof Element)) return null;
+  const owner = findInstance(target);
+  if (!owner) return null;
+  const chain = ancestorChain(owner);
+  return chain[Math.min(altDepth, chain.length - 1)] ?? owner;
 }
 
-function setHighlightFromEvent(): void {
-  rafQueued = false;
-  if (!lastEvent) return;
-  if (composer.visible) return;
-  const target = pickTarget(lastEvent);
-  if (!target) {
-    highlight.value = null;
+function renderHighlight(): void {
+  if (composer.visible || !lastEvent) {
+    hideHighlight();
     return;
   }
-  const data = getInspectorData(target);
-  const info = parseInspector(data);
-  if (!info) {
-    highlight.value = null;
+  if (eventInOverlay(lastEvent)) {
+    hideHighlight();
     return;
   }
-  const r = target.getBoundingClientRect();
-  highlight.value = {
-    rect: { left: r.left, top: r.top, width: r.width, height: r.height },
-    inspector: { path: info.path, line: info.line, column: info.column },
-    componentName: componentName(info.path),
-    githubUrl: buildGithubUrl(
-      store.options.githubRepo,
-      store.options.commitHash,
-      info.path,
-      info.line,
-    ),
-  };
+  const inst = pickInstance(lastEvent);
+  if (!inst) {
+    hideHighlight();
+    return;
+  }
+  const r = instanceRect(inst);
+  if (!r || (r.width === 0 && r.height === 0)) {
+    hideHighlight();
+    return;
+  }
+  const data = instanceInspector(inst);
+  const info = data ? parseInspector(data) : null;
+  const name = instanceName(inst);
+  const githubUrl = info
+    ? buildGithubUrl(store.options.githubRepo, store.options.commitHash, info.path, info.line)
+    : null;
+  const rect = { left: r.left, top: r.top, width: r.width, height: r.height };
+  if (shiftHeld && info && githubUrl) {
+    showHighlight({
+      rect,
+      mode: "jump",
+      source: `${info.path}:${info.line}`,
+      commit: store.options.commitHash,
+    });
+  } else {
+    showHighlight({
+      rect,
+      mode: "info",
+      name: info ? componentName(info.path) : name,
+      source: info ? `${info.path}:${info.line}` : null,
+    });
+  }
 }
 
-function onMouseMove(e: MouseEvent): void {
+function onMouseOver(e: MouseEvent): void {
   lastEvent = e;
-  if (!rafQueued) {
-    rafQueued = true;
-    requestAnimationFrame(setHighlightFromEvent);
+  renderHighlight();
+}
+
+function onMouseOut(e: MouseEvent): void {
+  // Mouse leaving the viewport entirely (relatedTarget null) — clear.
+  if (!e.relatedTarget) {
+    lastEvent = null;
+    hideHighlight();
   }
 }
 
 function onKey(e: KeyboardEvent): void {
   if (e.key === "Alt") {
     altDepth = e.type === "keydown" ? altDepth + 1 : 0;
-    setHighlightFromEvent();
+    renderHighlight();
+  }
+  if (e.key === "Shift") {
+    shiftHeld = e.type === "keydown";
+    renderHighlight();
   }
   if (e.key === "Escape") {
     if (composer.visible) closeComposer();
-    else store.setMode("idle");
+    else store.toggleActive();
   }
 }
 
 function onClickCapture(e: MouseEvent): void {
-  // Ignore clicks inside our own overlay (panel, statusbar, composer).
-  // composedPath crosses the shadow boundary, so we'll see our host id.
-  if (e.composedPath().some((n) => n instanceof Element && shouldIgnore(n))) return;
+  if (eventInOverlay(e)) return;
   e.preventDefault();
   e.stopPropagation();
-  const target = pickTarget(e);
-  if (!target) return;
-  const data = getInspectorData(target);
-  const info = parseInspector(data);
+  const inst = pickInstance(e);
+  if (!inst) return;
+  const data = instanceInspector(inst);
+  const info = data ? parseInspector(data) : null;
   if (!info || !data) return;
 
-  const r = target.getBoundingClientRect();
+  // Shift+click jumps to source on GitHub instead of opening the composer.
+  // The hover label can't host a clickable link (it follows the cursor and
+  // would disappear before reaching it), so the affordance lives on the
+  // highlighted rect itself via this modifier.
+  if (e.shiftKey) {
+    const url = buildGithubUrl(
+      store.options.githubRepo,
+      store.options.commitHash,
+      info.path,
+      info.line,
+    );
+    if (url) window.open(url, "_blank", "noopener");
+    return;
+  }
+
+  const r = instanceRect(inst);
+  if (!r) return;
+
+  // findOccurrenceIndex needs a real element with the attribute. The
+  // instance's first inspector-tagged descendant is the anchor.
+  const anchor = (inst.subTree?.el ?? inst.vnode?.el) as Element | null;
+  const targetEl = findAnchorElement(anchor, data) ?? document.body;
+
   composer.rect = { left: r.left, top: r.top, width: r.width, height: r.height };
   composer.pinX = e.clientX;
   composer.pinY = e.clientY;
   composer.target = {
     component_path: info.path,
     component_line: info.line,
-    component_index: findOccurrenceIndex(target, data),
+    component_index: findOccurrenceIndex(targetEl, data),
   };
   composer.body = "";
   composer.visible = true;
-  highlight.value = null;
+  hideHighlight();
+}
+
+function findAnchorElement(start: Element | null, data: string): Element | null {
+  if (!start) return null;
+  if (start.getAttribute?.("data-v-inspector") === data) return start;
+  return start.querySelector?.(`[data-v-inspector="${CSS.escape(data)}"]`) ?? null;
 }
 
 function closeComposer(): void {
@@ -165,7 +215,6 @@ async function submitComposer(): Promise<void> {
       body: composer.body,
     });
     closeComposer();
-    store.setMode("idle");
   } catch (err) {
     console.error("[stickynote] failed to create thread", err);
   } finally {
@@ -186,51 +235,24 @@ const composerStyle = computed<Record<string, string>>(() => {
 });
 
 onMounted(() => {
-  document.addEventListener("mousemove", onMouseMove, true);
+  document.addEventListener("mouseover", onMouseOver, true);
+  document.addEventListener("mouseout", onMouseOut, true);
   document.addEventListener("click", onClickCapture, true);
   window.addEventListener("keydown", onKey);
   window.addEventListener("keyup", onKey);
 });
 
 onBeforeUnmount(() => {
-  document.removeEventListener("mousemove", onMouseMove, true);
+  document.removeEventListener("mouseover", onMouseOver, true);
+  document.removeEventListener("mouseout", onMouseOut, true);
   document.removeEventListener("click", onClickCapture, true);
   window.removeEventListener("keydown", onKey);
   window.removeEventListener("keyup", onKey);
+  removeHighlight();
 });
 </script>
 
 <template>
-  <template v-if="highlight">
-    <div
-      class="sn-inspect-rect"
-      :style="{
-        left: highlight.rect.left + 'px',
-        top: highlight.rect.top + 'px',
-        width: highlight.rect.width + 'px',
-        height: highlight.rect.height + 'px',
-      }"
-    />
-    <div
-      class="sn-inspect-label"
-      :style="{
-        left: highlight.rect.left + 'px',
-        top: highlight.rect.top + highlight.rect.height + 6 + 'px',
-      }"
-    >
-      <span class="sn-name">{{ highlight.componentName }}</span>
-      <span>{{ highlight.inspector.path }}:{{ highlight.inspector.line }}</span>
-      <a
-        v-if="highlight.githubUrl"
-        :href="highlight.githubUrl"
-        target="_blank"
-        rel="noopener"
-        @click.stop
-        >github</a
-      >
-    </div>
-  </template>
-
   <div
     v-if="composer.visible && composer.rect"
     class="sn-composer-overlay"

@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import process from "node:process";
 import type { Plugin, PluginOption } from "vite";
 import { inspectorTransform } from "./inspector-transform.ts";
 import type { OverlayOptions, StickynoteOptions } from "./options.ts";
@@ -7,7 +8,7 @@ export type { OverlayOptions, StickynoteOptions } from "./options.ts";
 
 export default function stickynote(options: StickynoteOptions): PluginOption {
   const meta = readGitMeta();
-  return [inspectorTransform(), overlayPlugin(options, meta)];
+  return [inspectorTransform(meta.root), overlayPlugin(options, meta)];
 }
 
 // Vite's standard virtual module convention. `\0` marks the id as
@@ -18,7 +19,10 @@ export default function stickynote(options: StickynoteOptions): PluginOption {
 const RESOLVED_ID = "\0virtual:stickynote-mount.js";
 const VIRTUAL_ID = "virtual:stickynote-mount.js";
 
-function overlayPlugin(opts: StickynoteOptions, meta: { commit: string; dirty: boolean }): Plugin {
+function overlayPlugin(
+  opts: StickynoteOptions,
+  meta: { commit: string; dirty: boolean; root: string },
+): Plugin {
   return {
     name: "vite-plugin-stickynote",
     apply: "serve",
@@ -51,7 +55,7 @@ function overlayPlugin(opts: StickynoteOptions, meta: { commit: string; dirty: b
   };
 }
 
-function readGitMeta(): { commit: string; dirty: boolean } {
+function readGitMeta(): { commit: string; dirty: boolean; root: string } {
   try {
     const commit = execSync("git rev-parse HEAD", {
       stdio: ["ignore", "pipe", "ignore"],
@@ -61,11 +65,19 @@ function readGitMeta(): { commit: string; dirty: boolean } {
     const status = execSync("git status --porcelain", {
       stdio: ["ignore", "pipe", "ignore"],
     }).toString();
-    return { commit, dirty: status.length > 0 };
+    // Repo root, so inspector paths are relative to the GitHub tree (not the
+    // package cwd). Without this, monorepo packages emit paths like
+    // `src/Foo.vue` while GitHub expects `apps/website/src/Foo.vue`.
+    const root = execSync("git rev-parse --show-toplevel", {
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .toString()
+      .trim();
+    return { commit, dirty: status.length > 0, root };
   } catch {
     // Not in a git repo, or git missing. Treat as dirty so the GitHub link
     // is hidden / flagged rather than pointing at the wrong commit.
-    return { commit: "unknown", dirty: true };
+    return { commit: "unknown", dirty: true, root: process.cwd() };
   }
 }
 

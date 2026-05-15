@@ -15,7 +15,7 @@ const KEY_DATA = "data-v-inspector";
 const EXCLUDE_TAG = new Set(["template", "script", "style"]);
 const NODE_TYPE_ELEMENT = 1;
 
-export function inspectorTransform(): Plugin {
+export function inspectorTransform(root: string): Plugin {
   return {
     name: "stickynote:inspector-transform",
     enforce: "pre",
@@ -32,7 +32,9 @@ export function inspectorTransform(): Plugin {
       if (query.has("raw")) return null;
 
       const s = new MagicString(code);
-      const relativePath = normalizePath(path.relative(process.cwd(), filename));
+      // Path is relative to the git repo root so it lines up with the GitHub
+      // tree across monorepo packages (e.g. `apps/website/src/Foo.vue`).
+      const relativePath = normalizePath(path.relative(root, filename));
       const ast = parseTemplate(code, { comments: true });
 
       transformTemplate(ast, {

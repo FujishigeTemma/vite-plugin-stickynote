@@ -3,15 +3,12 @@ import type { ApiClient } from "./api.ts";
 import type { OverlayOptions } from "../options.ts";
 import type { Comment, Thread } from "./types.ts";
 
-export type Mode = "idle" | "inspecting";
-
 export type StickynoteStore = {
   options: OverlayOptions;
   api: ApiClient;
   active: Ref<boolean>;
   panelOpen: Ref<boolean>;
   showResolved: Ref<boolean>;
-  mode: Ref<Mode>;
   currentRoute: Ref<string>;
   threads: Ref<Thread[]>;
   commentsByThread: Record<string, Comment[]>;
@@ -22,7 +19,6 @@ export type StickynoteStore = {
   threadsForCurrentRoute: ComputedRef<Thread[]>;
   visibleThreads: ComputedRef<Thread[]>;
   toggleActive: () => void;
-  setMode: (m: Mode) => void;
   refreshThreads: () => Promise<void>;
   loadComments: (threadId: string) => Promise<void>;
   openThread: (id: string | null) => Promise<void>;
@@ -39,7 +35,6 @@ export function createStore(options: OverlayOptions, api: ApiClient): Stickynote
   const active = ref(false);
   const panelOpen = ref(false);
   const showResolved = ref(false);
-  const mode = ref<Mode>("idle");
   const currentRoute = ref(currentPath());
   const threads = ref<Thread[]>([]);
   const commentsByThread = reactive<Record<string, Comment[]>>({});
@@ -148,13 +143,8 @@ export function createStore(options: OverlayOptions, api: ApiClient): Stickynote
       void loadMe();
       void refreshThreads();
     } else {
-      mode.value = "idle";
       openThreadId.value = null;
     }
-  }
-
-  function setMode(m: Mode): void {
-    mode.value = m;
   }
 
   return {
@@ -163,7 +153,6 @@ export function createStore(options: OverlayOptions, api: ApiClient): Stickynote
     active,
     panelOpen,
     showResolved,
-    mode,
     currentRoute,
     threads,
     commentsByThread,
@@ -172,7 +161,6 @@ export function createStore(options: OverlayOptions, api: ApiClient): Stickynote
     threadsForCurrentRoute,
     visibleThreads,
     toggleActive,
-    setMode,
     refreshThreads,
     loadComments,
     openThread,

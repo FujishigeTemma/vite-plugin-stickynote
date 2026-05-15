@@ -56,38 +56,6 @@ export const OVERLAY_CSS = `
   font-size: 11px;
 }
 
-/* Inspector hover */
-.sn-inspect-rect {
-  position: fixed;
-  pointer-events: none;
-  border: 2px solid #8b5cf6;
-  background: rgba(139, 92, 246, 0.08);
-  border-radius: 2px;
-  transition: all 60ms linear;
-  z-index: 2147483100;
-}
-.sn-inspect-label {
-  position: fixed;
-  pointer-events: none;
-  background: #1f2937;
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-family: ui-monospace, monospace;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  z-index: 2147483101;
-  white-space: nowrap;
-}
-.sn-inspect-label .sn-name { color: #c4b5fd; }
-.sn-inspect-label a {
-  color: #93c5fd;
-  text-decoration: underline;
-  pointer-events: auto;
-}
-
 /* Pins */
 .sn-pin {
   position: fixed;

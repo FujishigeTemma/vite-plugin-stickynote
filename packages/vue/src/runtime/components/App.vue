@@ -71,7 +71,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div v-if="store.active.value" class="sn-root">
-    <Inspector v-if="store.mode.value === 'inspecting'" />
+    <Inspector />
     <PinLayer />
     <StalePinTray />
     <StatusBar />
