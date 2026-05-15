@@ -9,8 +9,8 @@ const store = useStore();
 
 const editing = ref(false);
 
-// PLAN 5.2: only the comment's author can edit/delete. The current user comes
-// from the worker's /api/me, which echoes the verified JWT sub regardless of
+// Only the comment's author can edit/delete. The current user comes from
+// the worker's /api/me, which echoes the verified JWT sub regardless of
 // auth path (Clerk JWT or dev-bearer fallback).
 const ownedByCurrent = computed(() => store.me.value?.sub === props.comment.created_by);
 

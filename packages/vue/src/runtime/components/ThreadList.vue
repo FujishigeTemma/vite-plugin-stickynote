@@ -1,28 +1,29 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import { findElementForThread, componentName } from "../inspector.ts";
+import { computed, inject, ref } from "vue";
+import { ELEMENT_MAP_KEY } from "../cache.ts";
+import { componentName, isThreadStale } from "../inspector.ts";
 import { useStore } from "../store-inject.ts";
 import CommentForm from "./CommentForm.vue";
 import type { Thread } from "../types.ts";
 
 const store = useStore();
+const elementMap = inject(ELEMENT_MAP_KEY);
 
 const showPageWideForm = ref(false);
 
 const grouped = computed(() => {
-  const all = store.threadsForCurrentRoute.value.filter((t) =>
-    store.showResolved.value ? true : t.status === "open",
-  );
+  const all = store.visibleThreads.value;
   return {
     pageWide: all.filter((t) => t.component_path == null),
     component: all.filter((t) => t.component_path != null),
   };
 });
 
-function isStale(t: Thread): boolean {
-  if (t.component_path == null || t.component_line == null) return false;
-  return findElementForThread(t.component_path, t.component_line, t.component_index) == null;
-}
+const staleIds = computed<Set<string>>(() => {
+  const map = elementMap?.value;
+  if (!map) return new Set();
+  return new Set(grouped.value.component.filter((t) => isThreadStale(t, map)).map((t) => t.id));
+});
 
 function summary(t: Thread): string {
   const list = store.commentsByThread[t.id];
@@ -102,7 +103,7 @@ async function createPageWide(body: string): Promise<void> {
       class="sn-thread-card"
       :class="{
         'sn-active-thread': store.openThreadId.value === t.id,
-        'sn-thread-stale': isStale(t),
+        'sn-thread-stale': staleIds.has(t.id),
       }"
       @click="open(t)"
     >
@@ -110,7 +111,7 @@ async function createPageWide(body: string): Promise<void> {
         <span class="sn-comp">{{ compLabel(t) }}</span>
         <span>· {{ t.created_by_name }}</span>
         <span v-if="t.status === 'resolved'">· resolved</span>
-        <span v-if="isStale(t)" class="sn-badge">stale</span>
+        <span v-if="staleIds.has(t.id)" class="sn-badge">stale</span>
       </div>
       <div class="sn-thread-body">{{ summary(t) }}</div>
     </div>

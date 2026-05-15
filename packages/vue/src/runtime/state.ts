@@ -16,10 +16,11 @@ export type StickynoteStore = {
   threads: Ref<Thread[]>;
   commentsByThread: Record<string, Comment[]>;
   openThreadId: Ref<string | null>;
-  // PLAN 5.4: identify the signed-in user so own-comment edit/delete checks
-  // can compare against the verified identity rather than guessing.
+  // Identify the signed-in user so own-comment edit/delete checks compare
+  // against the verified identity rather than guessing.
   me: Ref<{ sub: string; name: string } | null>;
   threadsForCurrentRoute: ComputedRef<Thread[]>;
+  visibleThreads: ComputedRef<Thread[]>;
   toggleActive: () => void;
   setMode: (m: Mode) => void;
   refreshThreads: () => Promise<void>;
@@ -59,6 +60,13 @@ export function createStore(options: OverlayOptions, api: ApiClient): Stickynote
     threads.value.filter((t) => t.route === currentRoute.value),
   );
 
+  // Resolved threads are hidden unless the user opted in via the panel toggle.
+  const visibleThreads = computed(() =>
+    showResolved.value
+      ? threadsForCurrentRoute.value
+      : threadsForCurrentRoute.value.filter((t) => t.status === "open"),
+  );
+
   async function refreshThreads(): Promise<void> {
     threads.value = await api.listThreads({
       includeResolved: showResolved.value,
@@ -80,11 +88,9 @@ export function createStore(options: OverlayOptions, api: ApiClient): Stickynote
   async function toggleResolved(thread: Thread): Promise<void> {
     const next = thread.status === "open" ? "resolved" : "open";
     const updated = await api.setStatus(thread.id, next);
-    if (updated) {
-      const i = threads.value.findIndex((t) => t.id === thread.id);
-      if (i >= 0) threads.value.splice(i, 1, updated);
-    }
-    await refreshThreads();
+    if (!updated) return;
+    const i = threads.value.findIndex((t) => t.id === thread.id);
+    if (i >= 0) threads.value.splice(i, 1, updated);
   }
 
   async function createThread(
@@ -164,6 +170,7 @@ export function createStore(options: OverlayOptions, api: ApiClient): Stickynote
     openThreadId,
     me,
     threadsForCurrentRoute,
+    visibleThreads,
     toggleActive,
     setMode,
     refreshThreads,

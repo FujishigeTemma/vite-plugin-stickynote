@@ -58,8 +58,8 @@ export function ancestorsWithInspector(start: Element): Element[] {
   return out;
 }
 
-// PLAN 7.9 fallback: if hovering a non-Vue element, walk up Vue's component
-// tree until we find a component-root DOM element.
+// Fallback for non-Vue elements: walk up Vue's component tree until we
+// find a component-root DOM element.
 export function fallbackToVueParent(el: Element | null): Element | null {
   if (!el) return null;
   if (getInspectorData(el)) return el;
@@ -72,9 +72,9 @@ export function fallbackToVueParent(el: Element | null): Element | null {
   return null;
 }
 
-// PLAN 7.2: when a component is rendered N times (lists, etc.), the file:line
-// pair is not unique. Add the document-order index of the matched element
-// among siblings with the same inspector data.
+// When a component is rendered N times (lists, etc.), file:line is not
+// unique. Add the document-order index of the matched element among
+// siblings with the same inspector data so we can re-find it later.
 export function findOccurrenceIndex(target: Element, data: string): number {
   let idx = -1;
   let count = 0;
@@ -91,21 +91,35 @@ export function findOccurrenceIndex(target: Element, data: string): number {
   return idx === -1 ? 0 : idx;
 }
 
-// Inverse of findOccurrenceIndex: given persisted (path, line, index), find
-// the live DOM element for that pin. Tolerates column drift by matching on
-// `path:line:` prefix.
-export function findElementForThread(path: string, line: number, index: number): Element | null {
-  const prefix = `${path}:${line}:`;
-  const matches: Element[] = [];
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-  let node = walker.nextNode();
-  while (node) {
-    const el = node as Element;
-    const data = getInspectorData(el);
-    if (data && data.startsWith(prefix)) matches.push(el);
-    node = walker.nextNode();
-  }
+import type { Thread } from "./types.ts";
+
+// Map from "path:line" → all matching DOM elements in document order.
+// Built once per tick by the overlay cache; pins/lists look up by key.
+export type ElementMap = Map<string, Element[]>;
+
+export function findElementInMap(
+  map: ElementMap,
+  path: string,
+  line: number,
+  index: number,
+): Element | null {
+  const matches = map.get(`${path}:${line}`);
+  if (!matches || matches.length === 0) return null;
   return matches[index] ?? matches[0] ?? null;
+}
+
+// A thread is stale when its anchor component is no longer in the DOM.
+// Page-wide threads (no path/line) can never be stale.
+export function isThreadStale(thread: Thread, elementMap: ElementMap): boolean {
+  if (thread.component_path == null || thread.component_line == null) return false;
+  return (
+    findElementInMap(
+      elementMap,
+      thread.component_path,
+      thread.component_line,
+      thread.component_index,
+    ) == null
+  );
 }
 
 // Friendly component name from a path: "src/components/HeroCard.vue" → "HeroCard"

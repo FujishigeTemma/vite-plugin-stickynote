@@ -87,14 +87,12 @@ threadsRoutes.post("/", async (c) => {
     ).bind(commentId, threadId, body.body, user.sub, user.name, now, now),
   ]);
 
-  const thread = await c.env.DB.prepare("SELECT * FROM threads WHERE id = ?")
-    .bind(threadId)
-    .first<ThreadRow>();
-  const comments = await c.env.DB.prepare(
-    "SELECT * FROM comments WHERE thread_id = ? ORDER BY created_at ASC",
-  )
-    .bind(threadId)
-    .all<CommentRow>();
+  const [thread, comments] = await Promise.all([
+    c.env.DB.prepare("SELECT * FROM threads WHERE id = ?").bind(threadId).first<ThreadRow>(),
+    c.env.DB.prepare("SELECT * FROM comments WHERE thread_id = ? ORDER BY created_at ASC")
+      .bind(threadId)
+      .all<CommentRow>(),
+  ]);
   return c.json({ thread, comments: comments.results }, 201);
 });
 

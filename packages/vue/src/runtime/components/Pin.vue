@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { computed, inject, ref, watch, type InjectionKey, type Ref } from "vue";
-import { findElementForThread } from "../inspector.ts";
+import { computed, inject, ref, watch } from "vue";
+import { ELEMENT_MAP_KEY, TICK_KEY } from "../cache.ts";
+import { findElementInMap } from "../inspector.ts";
 import { useStore } from "../store-inject.ts";
 import type { Thread } from "../types.ts";
 
 const props = defineProps<{ thread: Thread }>();
 const store = useStore();
 
-const TICK_KEY: InjectionKey<Ref<number>> = Symbol.for("stickynote:tick");
 const tick = inject(TICK_KEY);
+const elementMap = inject(ELEMENT_MAP_KEY);
 
 const position = ref<{ x: number; y: number } | null>(null);
 const stale = ref(false);
@@ -20,11 +21,15 @@ function compute(): void {
     stale.value = false;
     return;
   }
-  const el = findElementForThread(
-    props.thread.component_path,
-    props.thread.component_line,
-    props.thread.component_index,
-  );
+  const map = elementMap?.value;
+  const el = map
+    ? findElementInMap(
+        map,
+        props.thread.component_path,
+        props.thread.component_line,
+        props.thread.component_index,
+      )
+    : null;
   if (!el) {
     position.value = null;
     stale.value = true;
@@ -38,7 +43,7 @@ function compute(): void {
   stale.value = false;
 }
 
-// Recompute whenever the parent layer fires a tick (scroll, resize, DOM).
+// Recompute whenever the overlay cache fires a tick (scroll, resize, DOM).
 watch(
   () => tick?.value ?? 0,
   () => compute(),

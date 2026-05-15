@@ -1,19 +1,19 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import { findElementForThread } from "../inspector.ts";
+import { computed, inject } from "vue";
+import { ELEMENT_MAP_KEY } from "../cache.ts";
+import { isThreadStale } from "../inspector.ts";
 import { useStore } from "../store-inject.ts";
 
 const store = useStore();
+const elementMap = inject(ELEMENT_MAP_KEY);
 
-// PLAN 7.1: when a pinned component disappears (refactor), surface it in a
-// fixed tray so the comment isn't silently lost.
-const staleThreads = computed(() =>
-  store.threadsForCurrentRoute.value.filter((t) => {
-    if (t.status === "resolved" && !store.showResolved.value) return false;
-    if (t.component_path == null || t.component_line == null) return false;
-    return findElementForThread(t.component_path, t.component_line, t.component_index) == null;
-  }),
-);
+// When a pinned component disappears (refactor), surface it in a fixed
+// tray so the comment isn't silently lost.
+const staleThreads = computed(() => {
+  const map = elementMap?.value;
+  if (!map) return [];
+  return store.visibleThreads.value.filter((t) => isThreadStale(t, map));
+});
 </script>
 
 <template>

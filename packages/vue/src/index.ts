@@ -15,8 +15,8 @@ const vueInspector: VueInspectorFn = ((VueInspectorMod as { default?: unknown })
 export default function stickynote(options: StickynoteOptions): PluginOption {
   const meta = readGitMeta();
   return [
-    // PLAN 7.9: vite-plugin-vue-inspector is required for component
-    // identification. Bundle it structurally so consumers cannot forget it.
+    // vite-plugin-vue-inspector is required for component identification.
+    // Bundle it structurally so consumers cannot forget it.
     vueInspector({ enabled: true }),
     overlayPlugin(options, meta),
   ];

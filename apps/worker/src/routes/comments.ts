@@ -77,7 +77,6 @@ commentsRoutes.delete("/:id", async (c) => {
   if (target.created_by !== user.sub) {
     return c.json({ error: "forbidden" }, 403);
   }
-
   const head = await c.env.DB.prepare(
     "SELECT id FROM comments WHERE thread_id = ? ORDER BY created_at ASC LIMIT 1",
   )

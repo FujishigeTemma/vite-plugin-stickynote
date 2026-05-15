@@ -114,7 +114,7 @@ export const OVERLAY_CSS = `
 .sn-pin.sn-pin-stale { background: #6b7280; opacity: 0.6; }
 .sn-pin:hover { transform: scale(1.1); }
 
-/* Stale pin tray (PLAN 7.1) */
+/* Stale pin tray */
 .sn-stale-tray {
   position: fixed;
   top: 80px;

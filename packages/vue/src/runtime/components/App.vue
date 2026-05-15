@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, provide, watch } from "vue";
 import { createApi } from "../api.ts";
+import { createOverlayCache, ELEMENT_MAP_KEY, TICK_KEY } from "../cache.ts";
 import { createStore } from "../state.ts";
 import { STORE_KEY } from "../store-inject.ts";
 import type { OverlayOptions } from "../../options.ts";
@@ -14,11 +15,13 @@ const props = defineProps<{ options: OverlayOptions }>();
 
 const api = createApi(props.options.apiUrl, () => props.options.devBearer);
 const store = createStore(props.options, api);
+const cache = createOverlayCache();
 
 provide(STORE_KEY, store);
+provide(TICK_KEY, cache.tick);
+provide(ELEMENT_MAP_KEY, cache.elementMap);
 
 function onKeyDown(e: KeyboardEvent): void {
-  // PLAN 8: single keybinding toggles the overlay. Cmd/Ctrl + .
   // Match by `code` too — some IMEs / layouts produce different `key` values
   // when Meta is held.
   const isPeriod = e.key === "." || e.code === "Period";
@@ -26,12 +29,11 @@ function onKeyDown(e: KeyboardEvent): void {
     e.preventDefault();
     e.stopPropagation();
     store.toggleActive();
-    console.log("[stickynote] toggle →", store.active.value ? "on" : "off");
   }
 }
 
-// PLAN 4 / Realtime: poll for new threads while the overlay is active.
-// 5 s is a comfortable upper bound for "near-realtime" without burning CPU.
+// Poll for new threads while the overlay is active. 5 s is a comfortable
+// upper bound for "near-realtime" without burning CPU.
 const POLL_MS = 5000;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -39,12 +41,16 @@ watch(
   () => store.active.value,
   (a) => {
     if (a) {
+      cache.start();
       pollTimer = setInterval(() => {
         void store.refreshThreads();
       }, POLL_MS);
-    } else if (pollTimer) {
-      clearInterval(pollTimer);
-      pollTimer = null;
+    } else {
+      cache.stop();
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
     }
   },
 );
@@ -58,6 +64,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeyDown, true);
+  cache.stop();
   if (pollTimer) clearInterval(pollTimer);
 });
 </script>
