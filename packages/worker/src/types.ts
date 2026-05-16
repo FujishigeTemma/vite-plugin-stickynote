@@ -36,6 +36,7 @@ export type ThreadRow = {
   y_ratio: number;
   viewport_w: number;
   viewport_h: number;
+  additional_components: string | null;
   status: "open" | "resolved";
   created_by: string;
   created_by_name: string;

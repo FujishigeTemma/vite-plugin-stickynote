@@ -2,6 +2,12 @@ import * as v from "valibot";
 
 const NonEmptyString = v.pipe(v.string(), v.trim(), v.minLength(1));
 
+export const AdditionalComponentSchema = v.object({
+  path: v.string(),
+  line: v.number(),
+  index: v.number(),
+});
+
 export const CreateThreadSchema = v.object({
   route: v.string(),
   url: v.string(),
@@ -14,6 +20,7 @@ export const CreateThreadSchema = v.object({
   y_ratio: v.number(),
   viewport_w: v.number(),
   viewport_h: v.number(),
+  additional_components: v.optional(v.array(AdditionalComponentSchema), []),
   body: NonEmptyString,
 });
 

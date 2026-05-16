@@ -5,13 +5,14 @@
 
 const CONTAINER_ID = "__stickynote-inspect-container__";
 const CARD_ID = "__stickynote-inspect-card__";
+const SELECTION_CONTAINER_ID = "__stickynote-selection-container__";
 
 // Two label modes share the rect overlay:
 // - "info" is the default hover label (component name + source location)
-// - "jump" appears while Shift is held to preview the Shift+click action.
-//   A clickable link in the label itself is unworkable (it follows the
-//   cursor and would jump away before the user reaches it), so the modifier
-//   key reveals the destination instead.
+// - "jump" appears while Cmd/Ctrl is held to preview the modifier+click
+//   action. A clickable link in the label itself is unworkable (it follows
+//   the cursor and would jump away before the user reaches it), so the
+//   modifier key reveals the destination instead.
 export type HighlightOptions = {
   rect: { left: number; top: number; width: number; height: number };
 } & (
@@ -108,4 +109,94 @@ export function hideHighlight(): void {
 export function removeHighlight(): void {
   const el = getContainer();
   el?.remove();
+  const sel = document.getElementById(SELECTION_CONTAINER_ID);
+  sel?.remove();
+}
+
+// Persistent multi-component selection overlay used while the composer is
+// open. Visually subordinate to the live hover highlight so the cursor's
+// current target stays readable.
+export type SelectionRect = {
+  key: string;
+  rect: { left: number; top: number; width: number; height: number };
+  label: string;
+};
+
+const selectionContainerStyle: Partial<CSSStyleDeclaration> = {
+  position: "fixed",
+  inset: "0",
+  pointerEvents: "none",
+  zIndex: "2147483630",
+};
+
+const selectionItemStyle: Partial<CSSStyleDeclaration> = {
+  position: "fixed",
+  border: "2px solid #f97316",
+  borderRadius: "2px",
+  backgroundColor: "rgba(249, 115, 22, 0.08)",
+  boxSizing: "border-box",
+  pointerEvents: "none",
+  transition: "all 60ms linear",
+};
+
+const selectionLabelStyle: Partial<CSSStyleDeclaration> = {
+  position: "absolute",
+  left: "-2px",
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+  fontSize: "10px",
+  fontWeight: "600",
+  lineHeight: "1",
+  padding: "3px 6px",
+  borderRadius: "3px",
+  color: "#fff",
+  backgroundColor: "#ea580c",
+  boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
+  whiteSpace: "nowrap",
+  pointerEvents: "none",
+};
+
+function ensureSelectionContainer(): HTMLDivElement {
+  let el = document.getElementById(SELECTION_CONTAINER_ID) as HTMLDivElement | null;
+  if (el) return el;
+  el = document.createElement("div");
+  el.id = SELECTION_CONTAINER_ID;
+  el.setAttribute("data-stickynote-ignore", "");
+  Object.assign(el.style, selectionContainerStyle);
+  document.body.appendChild(el);
+  return el;
+}
+
+export function showSelectionHighlights(items: SelectionRect[]): void {
+  const container = ensureSelectionContainer();
+  const keep = new Set(items.map((i) => i.key));
+  for (const child of Array.from(container.children)) {
+    if (!keep.has((child as HTMLElement).dataset.key ?? "")) child.remove();
+  }
+  for (const item of items) {
+    let node = container.querySelector<HTMLDivElement>(`[data-key="${CSS.escape(item.key)}"]`);
+    if (!node) {
+      node = document.createElement("div");
+      node.dataset.key = item.key;
+      Object.assign(node.style, selectionItemStyle);
+      const label = document.createElement("div");
+      label.className = "__sn-selection-label";
+      Object.assign(label.style, selectionLabelStyle);
+      node.appendChild(label);
+      container.appendChild(node);
+    }
+    node.style.left = `${Math.round(item.rect.left * 100) / 100}px`;
+    node.style.top = `${Math.round(item.rect.top * 100) / 100}px`;
+    node.style.width = `${Math.round(item.rect.width * 100) / 100}px`;
+    node.style.height = `${Math.round(item.rect.height * 100) / 100}px`;
+    const label = node.querySelector<HTMLDivElement>(".__sn-selection-label");
+    if (label) {
+      label.textContent = item.label;
+      label.style.top = item.rect.top < 22 ? `${item.rect.height + 2}px` : "-22px";
+    }
+  }
+}
+
+export function clearSelectionHighlights(): void {
+  const el = document.getElementById(SELECTION_CONTAINER_ID);
+  if (el) el.innerHTML = "";
 }
