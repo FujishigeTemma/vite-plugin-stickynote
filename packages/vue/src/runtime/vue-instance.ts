@@ -14,6 +14,7 @@ export type Instance = {
   subTree?: Vnode;
   parent?: Instance | null;
   root?: Instance;
+  appContext?: { config?: { globalProperties?: Record<string, unknown> } };
 };
 
 export function findInstance(el: Element | null): Instance | null {
@@ -103,7 +104,7 @@ function vnodeRect(v: Vnode): DOMRect | null {
   return null;
 }
 
-// Source location (path:line:col) for an instance. Tries the instance's own
+// Source location (path:line) for an instance. Tries the instance's own
 // root element first, then walks down into its rendered subtree looking for
 // any element carrying the build-time `data-v-inspector` attribute. We need
 // this because fragment-rooted components don't have a single root element

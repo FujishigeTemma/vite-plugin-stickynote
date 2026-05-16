@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive } from "vue";
+import { computed, inject, onBeforeUnmount, onMounted, reactive, watch } from "vue";
+import { TICK_KEY } from "../cache.ts";
 import { hideHighlight, removeHighlight, showHighlight } from "../highlight.ts";
 import {
   buildGithubUrl,
@@ -18,6 +19,7 @@ import {
 } from "../vue-instance.ts";
 
 const store = useStore();
+const tick = inject(TICK_KEY);
 
 const composer = reactive<{
   visible: boolean;
@@ -42,26 +44,27 @@ const composer = reactive<{
 });
 
 let lastEvent: MouseEvent | null = null;
-let altDepth = 0;
+let altHeld = false;
 let shiftHeld = false;
 
-const HOST_ID = "stickynote-overlay-root";
-
-function eventInOverlay(e: MouseEvent): boolean {
-  return e.composedPath().some((n) => n instanceof Element && n.id === HOST_ID);
+function eventInOverlay(e: Event): boolean {
+  return e
+    .composedPath()
+    .some((n) => n instanceof Element && n.hasAttribute("data-stickynote-ignore"));
 }
 
 // Resolve the Vue component owning the hovered DOM element. Walks up via
 // `__vueParentComponent` per PLAN §7.9 so non-Vue elements (text, bare divs)
-// fall back to their nearest owning component. Then climbs `parent` by
-// altDepth so Alt walks outward.
+// fall back to their nearest owning component. With Alt held, step one
+// level outward.
 function pickInstance(e: MouseEvent): Instance | null {
   const target = e.target;
   if (!(target instanceof Element)) return null;
   const owner = findInstance(target);
   if (!owner) return null;
+  if (!(altHeld || e.altKey)) return owner;
   const chain = ancestorChain(owner);
-  return chain[Math.min(altDepth, chain.length - 1)] ?? owner;
+  return chain[1] ?? owner;
 }
 
 function renderHighlight(): void {
@@ -90,7 +93,7 @@ function renderHighlight(): void {
     ? buildGithubUrl(store.options.githubRepo, store.options.commitHash, info.path, info.line)
     : null;
   const rect = { left: r.left, top: r.top, width: r.width, height: r.height };
-  if (shiftHeld && info && githubUrl) {
+  if ((lastEvent.shiftKey || shiftHeld) && info && githubUrl) {
     showHighlight({
       rect,
       mode: "jump",
@@ -112,17 +115,10 @@ function onMouseOver(e: MouseEvent): void {
   renderHighlight();
 }
 
-function onMouseOut(e: MouseEvent): void {
-  // Mouse leaving the viewport entirely (relatedTarget null) — clear.
-  if (!e.relatedTarget) {
-    lastEvent = null;
-    hideHighlight();
-  }
-}
-
 function onKey(e: KeyboardEvent): void {
+  if (e.repeat) return;
   if (e.key === "Alt") {
-    altDepth = e.type === "keydown" ? altDepth + 1 : 0;
+    altHeld = e.type === "keydown";
     renderHighlight();
   }
   if (e.key === "Shift") {
@@ -139,6 +135,7 @@ function onClickCapture(e: MouseEvent): void {
   if (eventInOverlay(e)) return;
   e.preventDefault();
   e.stopPropagation();
+  e.stopImmediatePropagation();
   const inst = pickInstance(e);
   if (!inst) return;
   const data = instanceInspector(inst);
@@ -226,17 +223,17 @@ function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
-const composerStyle = computed<Record<string, string>>(() => {
-  if (!composer.visible || !composer.rect) return {};
-  return {
-    left: Math.min(window.innerWidth - 340, composer.pinX + 12) + "px",
-    top: Math.min(window.innerHeight - 220, composer.pinY + 12) + "px",
-  };
-});
+const composerStyle = computed(() => ({
+  left: Math.min(window.innerWidth - 340, composer.pinX + 12) + "px",
+  top: Math.min(window.innerHeight - 220, composer.pinY + 12) + "px",
+}));
+
+// Recompute on every overlay tick (scroll, resize, DOM mutation) so the
+// highlight follows the source element instead of disappearing.
+watch(() => tick?.value ?? 0, renderHighlight);
 
 onMounted(() => {
   document.addEventListener("mouseover", onMouseOver, true);
-  document.addEventListener("mouseout", onMouseOut, true);
   document.addEventListener("click", onClickCapture, true);
   window.addEventListener("keydown", onKey);
   window.addEventListener("keyup", onKey);
@@ -244,7 +241,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener("mouseover", onMouseOver, true);
-  document.removeEventListener("mouseout", onMouseOut, true);
   document.removeEventListener("click", onClickCapture, true);
   window.removeEventListener("keydown", onKey);
   window.removeEventListener("keyup", onKey);
@@ -280,3 +276,25 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.sn-composer-overlay {
+  position: fixed;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  padding: 12px;
+  width: 320px;
+  pointer-events: auto;
+  z-index: 2147483120;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sn-composer-target {
+  font-size: 11px;
+  color: #6b7280;
+  font-family: ui-monospace, monospace;
+}
+</style>

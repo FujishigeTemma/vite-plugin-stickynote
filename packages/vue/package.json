@@ -4,17 +4,14 @@
   "description": "In-app comment overlay for Vue dev environments — pin coordinates, threads, and replies, persisted via a Cloudflare Worker + D1.",
   "license": "MIT",
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
-    },
-    "./runtime/overlay": {
-      "types": "./dist/runtime/overlay.d.mts",
-      "import": "./dist/runtime/overlay.mjs"
     },
     "./package.json": "./package.json"
   },
@@ -30,19 +27,20 @@
   "dependencies": {
     "@vue/compiler-dom": "^3.5.34",
     "hono": "^4.12.18",
-    "magic-string": "^0.30.21",
-    "vue": "^3.5.34"
+    "magic-string": "^0.30.21"
   },
   "devDependencies": {
-    "@tsdown/css": "^0.22.0",
     "@types/node": "catalog:",
     "@vitejs/plugin-vue": "^6.0.7",
     "stickynote-worker": "workspace:*",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "vue": "^3.5.34"
   },
   "peerDependencies": {
-    "vite": "^5.0.0 || ^6.0.0 || ^7.0.0"
+    "@vitejs/plugin-vue": "^5.0.0 || ^6.0.0",
+    "vite": "^5.0.0 || ^6.0.0 || ^7.0.0",
+    "vue": "^3.5.0"
   }
 }

@@ -53,6 +53,7 @@ const cardStyle: Partial<CSSStyleDeclaration> = {
 function buildContainer(): HTMLDivElement {
   const el = document.createElement("div");
   el.id = CONTAINER_ID;
+  el.setAttribute("data-stickynote-ignore", "");
   Object.assign(el.style, containerStyle);
   const card = document.createElement("div");
   card.id = CARD_ID;

@@ -30,3 +30,21 @@ const staleThreads = computed(() => {
     </button>
   </div>
 </template>
+
+<style scoped>
+.sn-stale-tray {
+  position: fixed;
+  top: 80px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: auto;
+  max-width: 220px;
+}
+/* Override the absolute positioning of `.sn-pin` so tray buttons stack. */
+.sn-stale-tray .sn-pin {
+  position: relative;
+  margin: 0;
+}
+</style>

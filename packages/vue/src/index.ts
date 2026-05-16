@@ -1,6 +1,9 @@
 import { execSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import process from "node:process";
-import type { Plugin, PluginOption } from "vite";
+import { fileURLToPath } from "node:url";
+import { normalizePath, type Plugin, type PluginOption } from "vite";
 import { inspectorTransform } from "./inspector-transform.ts";
 import type { OverlayOptions, StickynoteOptions } from "./options.ts";
 
@@ -11,13 +14,17 @@ export default function stickynote(options: StickynoteOptions): PluginOption {
   return [inspectorTransform(meta.root), overlayPlugin(options, meta)];
 }
 
-// Vite's standard virtual module convention. `\0` marks the id as
-// plugin-owned so other plugins skip it; Vite serves it through `/@id/__x00...`
-// in the browser, with the bare specifier inside resolved by Vite's normal
-// module pipeline. Inlining the script body instead would bypass that
-// pipeline and the bare specifier would leak to the browser unresolved.
-const RESOLVED_ID = "\0virtual:stickynote-mount.js";
-const VIRTUAL_ID = "virtual:stickynote-mount.js";
+// The runtime ships as source files (under `src/runtime/`) and is compiled by
+// the consumer's Vite + @vitejs/plugin-vue. This lets SFC `<style scoped>`
+// work natively — no CSS-in-JS workaround, no Shadow DOM.
+//
+// Virtual modules drive the entry point so the consumer doesn't need to know
+// any path. `virtual:stickynote-path:<rel>` resolves to the absolute source
+// file; `load` reads it from disk directly so Vite's `fs.allow` restrictions
+// don't block files outside the consumer's project root.
+const RUNTIME_ROOT = normalizePath(path.resolve(fileURLToPath(import.meta.url), "../../src"));
+const VIRTUAL_MOUNT = "virtual:stickynote-mount.js";
+const VIRTUAL_PATH_PREFIX = "virtual:stickynote-path:";
 
 function overlayPlugin(
   opts: StickynoteOptions,
@@ -27,27 +34,46 @@ function overlayPlugin(
     name: "vite-plugin-stickynote",
     apply: "serve",
     resolveId(id) {
-      return id === VIRTUAL_ID ? RESOLVED_ID : null;
+      if (id === VIRTUAL_MOUNT) return id;
+      if (id.startsWith(VIRTUAL_PATH_PREFIX)) {
+        return `${RUNTIME_ROOT}/${id.slice(VIRTUAL_PATH_PREFIX.length)}`;
+      }
+      return null;
     },
-    load(id) {
-      if (id !== RESOLVED_ID) return null;
-      const init: OverlayOptions = {
-        apiUrl: stripTrailingSlash(opts.apiUrl),
-        githubRepo: opts.githubRepo ?? null,
-        commitHash: meta.commit,
-        dirtyBuild: meta.dirty,
-        devBearer: opts.devBearer ?? null,
-      };
-      return [
-        `import { mount } from "vite-plugin-stickynote/runtime/overlay";`,
-        `mount(${JSON.stringify(init)});`,
-      ].join("\n");
+    async load(id) {
+      if (id === VIRTUAL_MOUNT) {
+        const init: OverlayOptions = {
+          apiUrl: stripTrailingSlash(opts.apiUrl),
+          githubRepo: opts.githubRepo ?? null,
+          commitHash: meta.commit,
+          dirtyBuild: meta.dirty,
+          devBearer: opts.devBearer ?? null,
+        };
+        return [
+          `import { mount } from "virtual:stickynote-path:runtime/overlay.ts";`,
+          `mount(${JSON.stringify(init)});`,
+        ].join("\n");
+      }
+      // Read source files for any id rooted inside our runtime tree. This
+      // catches both the entry (resolved above) and its relative imports
+      // (e.g. `./components/App.vue`), which Vite resolves to absolute paths
+      // under the same root.
+      if (id.startsWith(RUNTIME_ROOT)) {
+        const [filename, rawQuery] = id.split("?", 2);
+        if (!filename) return null;
+        // Let @vitejs/plugin-vue handle SFC sub-requests (`?vue&type=...`).
+        if (rawQuery && new URLSearchParams(rawQuery).has("vue")) return null;
+        if (fs.existsSync(filename)) {
+          return await fs.promises.readFile(filename, "utf-8");
+        }
+      }
+      return null;
     },
     transformIndexHtml() {
       return [
         {
           tag: "script",
-          attrs: { type: "module", src: `/@id/__x00__${VIRTUAL_ID}` },
+          attrs: { type: "module", src: `/@id/${VIRTUAL_MOUNT}` },
           injectTo: "body",
         },
       ];

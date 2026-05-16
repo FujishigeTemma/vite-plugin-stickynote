@@ -1,7 +1,8 @@
-import { computed, reactive, ref, type ComputedRef, type Ref } from "vue";
+import { computed, reactive, ref, watch, type ComputedRef, type Ref } from "vue";
 import type { ApiClient } from "./api.ts";
 import type { OverlayOptions } from "../options.ts";
 import type { Comment, Thread } from "./types.ts";
+import { findInstance } from "./vue-instance.ts";
 
 export type StickynoteStore = {
   options: OverlayOptions;
@@ -40,11 +41,6 @@ export function createStore(options: OverlayOptions, api: ApiClient): Stickynote
   const commentsByThread = reactive<Record<string, Comment[]>>({});
   const openThreadId = ref<string | null>(null);
   const me = ref<{ sub: string; name: string } | null>(null);
-
-  trackRouteChanges((path) => {
-    currentRoute.value = path;
-    void refreshThreads();
-  });
 
   async function loadMe(): Promise<void> {
     if (me.value) return;
@@ -176,28 +172,40 @@ function currentPath(): string {
   return window.location.pathname;
 }
 
-// Host apps drive routes through history.pushState/replaceState which never
-// fire popstate. Wrap them so we can react. Idempotent and harmless if the
-// host overrides them again.
-function trackRouteChanges(onChange: (path: string) => void): void {
-  let last = currentPath();
-  const emit = () => {
-    const next = currentPath();
-    if (next !== last) {
-      last = next;
-      onChange(next);
-    }
-  };
-  for (const key of ["pushState", "replaceState"] as const) {
-    const orig = history[key].bind(history);
-    type Wrapped = (...args: unknown[]) => unknown;
-    (history as unknown as Record<string, Wrapped>)[key] = function patched(
-      ...args: unknown[]
-    ): unknown {
-      const result = (orig as unknown as Wrapped)(...args);
-      queueMicrotask(emit);
-      return result;
-    };
+type RouterLike = {
+  currentRoute: { value: { fullPath: string; matched: { path: string }[] } };
+};
+
+// Prefer the host app's vue-router so we get route patterns ("/users/:id")
+// per PLAN §7.3. Falls back to popstate when no router is installed; we
+// intentionally don't monkey-patch history.pushState/replaceState.
+export function setupRouteTracking(store: StickynoteStore): () => void {
+  const router = findHostRouter();
+  if (router) {
+    return watch(
+      () => router.currentRoute.value,
+      (r) => {
+        const matched = r.matched[r.matched.length - 1];
+        store.currentRoute.value = matched?.path ?? r.fullPath;
+        void store.refreshThreads();
+      },
+      { immediate: true },
+    );
   }
-  window.addEventListener("popstate", emit);
+  const onPop = (): void => {
+    store.currentRoute.value = currentPath();
+    void store.refreshThreads();
+  };
+  window.addEventListener("popstate", onPop);
+  return () => window.removeEventListener("popstate", onPop);
+}
+
+function findHostRouter(): RouterLike | null {
+  // Any inspector-tagged element belongs to the host app's tree; from there
+  // we walk up to its component and read the app's globalProperties.
+  const anchor = document.querySelector("[data-v-inspector]");
+  if (!anchor) return null;
+  const inst = findInstance(anchor);
+  const router = inst?.appContext?.config?.globalProperties?.$router;
+  return (router as RouterLike | undefined) ?? null;
 }

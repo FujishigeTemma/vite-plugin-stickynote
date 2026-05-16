@@ -50,3 +50,42 @@ async function onDelete(): Promise<void> {
     />
   </div>
 </template>
+
+<style scoped>
+.sn-comment {
+  border: 1px solid #f3f4f6;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.sn-comment.sn-deleted {
+  color: #9ca3af;
+  font-style: italic;
+}
+.sn-comment-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+.sn-comment-author {
+  font-weight: 600;
+  color: #111827;
+}
+.sn-comment-actions {
+  display: flex;
+  gap: 6px;
+}
+.sn-comment-actions button {
+  background: transparent;
+  border: none;
+  color: #6b7280;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.sn-comment-actions button:hover {
+  color: #ef4444;
+}
+</style>

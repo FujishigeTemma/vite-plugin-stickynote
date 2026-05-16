@@ -12,7 +12,6 @@ export type InspectorInfo = {
   raw: string;
   path: string;
   line: number;
-  column: number;
 };
 
 export function getInspectorData(el: Element | null): string | null {
@@ -21,13 +20,12 @@ export function getInspectorData(el: Element | null): string | null {
 
 export function parseInspector(raw: string | null): InspectorInfo | null {
   if (!raw) return null;
-  const m = /^(.+):(\d+):(\d+)$/.exec(raw);
+  const m = /^(.+):(\d+)$/.exec(raw);
   if (!m) return null;
   return {
     raw,
     path: m[1] as string,
     line: Number(m[2]),
-    column: Number(m[3]),
   };
 }
 
@@ -51,8 +49,6 @@ export function ancestorsWithInspector(start: Element): Element[] {
 // When a component renders N times (lists), file:line is not unique.
 // Record the document-order index among matches so we can re-find it.
 export function findOccurrenceIndex(target: Element, data: string): number {
-  // Attribute-value selector. data is "path:line:col" — safe to embed via
-  // CSS.escape since paths can contain characters that need quoting.
   const all = document.querySelectorAll(`[${ATTR}="${CSS.escape(data)}"]`);
   for (let i = 0; i < all.length; i++) {
     if (all[i] === target) return i;
@@ -71,12 +67,9 @@ export function buildElementMap(): ElementMap {
   for (const el of all) {
     const raw = el.getAttribute(ATTR);
     if (!raw) continue;
-    // Drop the column from "path:line:col" — pins identify by path:line.
-    const lastColon = raw.lastIndexOf(":");
-    const key = lastColon === -1 ? raw : raw.slice(0, lastColon);
-    const list = map.get(key);
+    const list = map.get(raw);
     if (list) list.push(el);
-    else map.set(key, [el]);
+    else map.set(raw, [el]);
   }
   return map;
 }
@@ -89,7 +82,7 @@ export function findElementInMap(
 ): Element | null {
   const matches = map.get(`${path}:${line}`);
   if (!matches || matches.length === 0) return null;
-  return matches[index] ?? matches[0] ?? null;
+  return matches[index] ?? null;
 }
 
 export function isThreadStale(thread: Thread, elementMap: ElementMap): boolean {

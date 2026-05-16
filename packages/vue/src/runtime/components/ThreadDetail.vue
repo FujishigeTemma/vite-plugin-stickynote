@@ -76,3 +76,33 @@ function back(): void {
     </div>
   </template>
 </template>
+
+<style scoped>
+.sn-detail-back {
+  background: transparent;
+  border: none;
+  color: #6b7280;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.sn-detail-back:hover {
+  color: #111827;
+}
+.sn-detail-meta {
+  font-size: 11px;
+  color: #6b7280;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.sn-detail-meta a {
+  color: #3b82f6;
+}
+.sn-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+</style>

@@ -5,7 +5,7 @@ import MagicString from "magic-string";
 import { normalizePath, type Plugin } from "vite";
 
 // Minimal SFC-template source attribution. Walks each `.vue` file's template
-// AST and inserts `data-v-inspector="path:line:col"` on every element so the
+// AST and inserts `data-v-inspector="path:line"` on every element so the
 // overlay can map DOM nodes back to source. Carved out of
 // vite-plugin-vue-inspector (MIT, webfansplz) — kept only the Vue 3 template
 // branch, no JSX / vapor / inspector-UI / Vue 2 / appendTo / `_interopVNode`
@@ -48,8 +48,8 @@ export function inspectorTransform(root: string): Plugin {
               node.props.length > 0
                 ? Math.max(...node.props.map((p) => p.loc.end.offset))
                 : node.loc.start.offset + node.tag.length + 1;
-            const { line, column } = node.loc.start;
-            s.prependLeft(insertPosition, ` ${KEY_DATA}="${relativePath}:${line}:${column}"`);
+            const { line } = node.loc.start;
+            s.prependLeft(insertPosition, ` ${KEY_DATA}="${relativePath}:${line}"`);
           },
         ],
       });
