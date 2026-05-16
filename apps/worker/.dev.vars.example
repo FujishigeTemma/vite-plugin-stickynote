@@ -1,9 +1,0 @@
-# Local-dev environment for `wrangler dev`. Copy to `.dev.vars` and adjust.
-# In production, set CLERK_ISSUER to a real Clerk Frontend API origin and
-# omit DEV_BEARER / DEV_USER_NAME entirely.
-
-# Sentinel "dev" enables the static-bearer auth path (local only).
-CLERK_ISSUER=dev
-# Any opaque string. Must match the `devBearer` plugin option in apps/website.
-DEV_BEARER=stickynote-dev-token
-DEV_USER_NAME=Local Dev

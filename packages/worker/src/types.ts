@@ -1,10 +1,15 @@
+import type { D1Database } from "@cloudflare/workers-types";
+
 export type Env = {
   DB: D1Database;
   ALLOWED_ORIGINS: string;
-  // Either a real Clerk Frontend API origin, or the literal "dev" sentinel
-  // to enable the local-only static-bearer auth path.
-  CLERK_ISSUER: string;
-  // Required when CLERK_ISSUER === "dev". Ignored otherwise.
+  // Production Clerk credentials. Required in prod; ignored when the local-dev
+  // escape hatch is active (CLERK_ISSUER === "dev").
+  CLERK_SECRET_KEY: string;
+  CLERK_PUBLISHABLE_KEY: string;
+  // Local-dev escape hatch: set CLERK_ISSUER="dev" + DEV_BEARER (+ optional
+  // DEV_USER_NAME) to bypass Clerk and accept a static bearer token.
+  CLERK_ISSUER?: "dev";
   DEV_BEARER?: string;
   DEV_USER_NAME?: string;
 };

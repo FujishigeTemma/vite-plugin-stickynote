@@ -8,13 +8,14 @@
   },
   // Non-secret runtime config. Override per environment as needed.
   // ALLOWED_ORIGINS is a comma-separated list of full origins.
-  // CLERK_ISSUER is the Clerk Frontend API origin used to derive the JWKS URL
-  // and validate the `iss` claim.
+  // CLERK_PUBLISHABLE_KEY is non-secret; set per environment.
   "vars": {
     "ALLOWED_ORIGINS": "http://localhost:5173,http://localhost:5174",
   },
-  // CLERK_ISSUER, DEV_BEARER, DEV_USER_NAME come from `.dev.vars` in dev and
-  // from `wrangler secret put …` in deployed envs. See `.dev.vars.example`.
+  // CLERK_SECRET_KEY, CLERK_PUBLISHABLE_KEY come from `.dev.vars` in dev and
+  // from `wrangler secret put …` in deployed envs (secret key only).
+  // CLERK_ISSUER=dev + DEV_BEARER + DEV_USER_NAME enable the local-dev
+  // static-bearer escape hatch. See `.dev.vars.example`.
   "d1_databases": [
     {
       "binding": "DB",

@@ -28,14 +28,16 @@
     "prepublishOnly": "vp run build"
   },
   "dependencies": {
-    "@vue/compiler-dom": "^3.5.13",
-    "magic-string": "^0.30.0",
-    "vue": "^3.5.13"
+    "@vue/compiler-dom": "^3.5.34",
+    "hono": "^4.12.18",
+    "magic-string": "^0.30.21",
+    "vue": "^3.5.34"
   },
   "devDependencies": {
     "@tsdown/css": "^0.22.0",
     "@types/node": "catalog:",
-    "@vitejs/plugin-vue": "^5.2.1",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "stickynote-worker": "workspace:*",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:"

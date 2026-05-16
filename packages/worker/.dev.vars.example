@@ -1,0 +1,17 @@
+# Local-dev environment for `wrangler dev`. Copy to `.dev.vars` and adjust.
+#
+# Production: set CLERK_SECRET_KEY (secret) and CLERK_PUBLISHABLE_KEY in
+# wrangler vars / secrets, and omit CLERK_ISSUER / DEV_BEARER / DEV_USER_NAME.
+
+# Local-dev escape hatch: the sentinel "dev" enables the static-bearer auth
+# path and skips Clerk entirely. Remove this line to exercise the real Clerk
+# flow against test keys below.
+CLERK_ISSUER=dev
+# Any opaque string. Must match the `devBearer` plugin option in apps/website.
+DEV_BEARER=stickynote-dev-token
+DEV_USER_NAME=Local Dev
+
+# Real Clerk keys (used when CLERK_ISSUER is unset). Pull from your Clerk
+# dashboard. Secret key MUST be a secret in deployed envs.
+# CLERK_SECRET_KEY=sk_test_...
+# CLERK_PUBLISHABLE_KEY=pk_test_...

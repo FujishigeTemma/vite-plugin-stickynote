@@ -1,3 +1,5 @@
+import { hc } from "hono/client";
+import type { AppType } from "stickynote-worker/app-type";
 import type { Comment, CreateThreadInput, Thread } from "./types.ts";
 
 export type AuthSource = () => string | Promise<string | null> | null;
@@ -15,97 +17,119 @@ export type ApiClient = {
 };
 
 export function createApi(baseUrl: string, getToken: AuthSource): ApiClient {
-  async function authHeader(): Promise<Record<string, string>> {
-    const token = await Promise.resolve(getToken());
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  }
+  const client = hc<AppType>(baseUrl, {
+    headers: async (): Promise<Record<string, string>> => {
+      const token = await Promise.resolve(getToken());
+      return token ? { Authorization: `Bearer ${token}` } : {};
+    },
+  });
 
-  async function call<T>(path: string, init: RequestInit = {}): Promise<T | null> {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      ...(await authHeader()),
-      ...(init.headers as Record<string, string> | undefined),
-    };
-    const res = await fetch(`${baseUrl}${path}`, { ...init, headers });
-    if (res.status === 204) return null;
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.warn(`[stickynote] ${init.method ?? "GET"} ${path} → ${res.status} ${text}`);
-      return null;
-    }
-    return (await res.json()) as T;
+  async function warn(label: string, res: Response): Promise<void> {
+    const text = await res.text().catch(() => "");
+    console.warn(`[stickynote] ${label} → ${res.status} ${text}`);
   }
 
   return {
     async me() {
-      return await call<{ sub: string; name: string }>("/api/me");
+      const res = await client.api.me.$get();
+      if (!res.ok) {
+        await warn("GET /api/me", res);
+        return null;
+      }
+      return (await res.json()) as { sub: string; name: string };
     },
 
     async listThreads(opts) {
-      const q = new URLSearchParams();
-      if (opts?.route) q.set("route", opts.route);
-      if (opts?.includeResolved) q.set("includeResolved", "true");
-      const data = await call<{ threads: Thread[] }>(
-        `/api/threads${q.size ? `?${q.toString()}` : ""}`,
-      );
-      return data?.threads ?? [];
+      const query: { route?: string; includeResolved?: "true" | "false" } = {};
+      if (opts?.route) query.route = opts.route;
+      if (opts?.includeResolved) query.includeResolved = "true";
+      const res = await client.api.threads.$get({ query });
+      if (!res.ok) {
+        await warn("GET /api/threads", res);
+        return [];
+      }
+      const data = await res.json();
+      return data.threads;
     },
 
     async createThread(input) {
-      const data = await call<{ thread: Thread; comments: Comment[] }>("/api/threads", {
-        method: "POST",
-        body: JSON.stringify(input),
-      });
-      if (!data) throw new Error("Failed to create thread");
-      return data;
+      const res = await client.api.threads.$post({ json: input });
+      if (!res.ok) {
+        await warn("POST /api/threads", res);
+        throw new Error("Failed to create thread");
+      }
+      return (await res.json()) as { thread: Thread; comments: Comment[] };
     },
 
     async setStatus(id, status) {
-      const data = await call<{ thread: Thread }>(`/api/threads/${encodeURIComponent(id)}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status }),
+      const res = await client.api.threads[":id"].status.$patch({
+        param: { id },
+        json: { status },
       });
-      return data?.thread ?? null;
+      if (!res.ok) {
+        await warn(`PATCH /api/threads/${id}/status`, res);
+        return null;
+      }
+      const data = await res.json();
+      return data.thread ?? null;
     },
 
     async deleteThread(id) {
-      await call<{ ok: true }>(`/api/threads/${encodeURIComponent(id)}`, {
-        method: "DELETE",
-      });
+      const res = await client.api.threads[":id"].$delete({ param: { id } });
+      if (!res.ok) {
+        await warn(`DELETE /api/threads/${id}`, res);
+      }
     },
 
     async listComments(threadId) {
-      const data = await call<{ comments: Comment[] }>(
-        `/api/threads/${encodeURIComponent(threadId)}/comments`,
-      );
-      return data?.comments ?? [];
+      const res = await client.api.threads[":id"].comments.$get({ param: { id: threadId } });
+      if (!res.ok) {
+        await warn(`GET /api/threads/${threadId}/comments`, res);
+        return [];
+      }
+      const data = await res.json();
+      return data.comments;
     },
 
     async createReply(threadId, body) {
-      const data = await call<{ comment: Comment }>("/api/comments", {
-        method: "POST",
-        body: JSON.stringify({ thread_id: threadId, body }),
+      const res = await client.api.comments.$post({
+        json: { thread_id: threadId, body },
       });
-      return data?.comment ?? null;
+      if (!res.ok) {
+        await warn("POST /api/comments", res);
+        return null;
+      }
+      const data = await res.json();
+      return (data.comment ?? null) as Comment | null;
     },
 
     async editComment(id, body) {
-      const data = await call<{ comment: Comment }>(`/api/comments/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        body: JSON.stringify({ body }),
+      const res = await client.api.comments[":id"].$patch({
+        param: { id },
+        json: { body },
       });
-      return data?.comment ?? null;
+      if (!res.ok) {
+        await warn(`PATCH /api/comments/${id}`, res);
+        return null;
+      }
+      const data = await res.json();
+      return (data.comment ?? null) as Comment | null;
     },
 
     async deleteComment(id) {
-      const data = await call<{
-        comment?: Comment;
-        thread_deleted?: boolean;
-      }>(`/api/comments/${encodeURIComponent(id)}`, { method: "DELETE" });
-      return {
-        comment: data?.comment ?? null,
-        thread_deleted: data?.thread_deleted ?? false,
-      };
+      const res = await client.api.comments[":id"].$delete({ param: { id } });
+      if (!res.ok) {
+        await warn(`DELETE /api/comments/${id}`, res);
+        return { comment: null, thread_deleted: false };
+      }
+      const data = (await res.json()) as { ok: true; thread_deleted: true } | { comment: Comment };
+      if ("thread_deleted" in data && data.thread_deleted) {
+        return { comment: null, thread_deleted: true };
+      }
+      if ("comment" in data) {
+        return { comment: data.comment, thread_deleted: false };
+      }
+      return { comment: null, thread_deleted: false };
     },
   };
 }
