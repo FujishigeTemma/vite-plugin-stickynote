@@ -44,6 +44,8 @@ const composer = reactive<{
   rect: { left: number; top: number; width: number; height: number } | null;
   pinX: number;
   pinY: number;
+  dialogX: number;
+  dialogY: number;
   primary: SelectedComponent | null;
   additional: SelectedComponent[];
 }>({
@@ -53,9 +55,37 @@ const composer = reactive<{
   rect: null,
   pinX: 0,
   pinY: 0,
+  dialogX: 0,
+  dialogY: 0,
   primary: null,
   additional: [],
 });
+
+let dialogDragOffset: { dx: number; dy: number } | null = null;
+
+function onDialogPointerDown(e: PointerEvent): void {
+  if (e.button !== 0) return;
+  dialogDragOffset = {
+    dx: e.clientX - composer.dialogX,
+    dy: e.clientY - composer.dialogY,
+  };
+  (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+}
+
+function onDialogPointerMove(e: PointerEvent): void {
+  if (!dialogDragOffset) return;
+  e.preventDefault();
+  composer.dialogX = e.clientX - dialogDragOffset.dx;
+  composer.dialogY = e.clientY - dialogDragOffset.dy;
+}
+
+function onDialogPointerUp(e: PointerEvent): void {
+  const target = e.currentTarget as Element;
+  if (target.hasPointerCapture?.(e.pointerId)) {
+    target.releasePointerCapture?.(e.pointerId);
+  }
+  dialogDragOffset = null;
+}
 
 let lastEvent: MouseEvent | null = null;
 let altHeld = false;
@@ -230,6 +260,8 @@ function onClickCapture(e: MouseEvent): void {
   composer.rect = { left: r.left, top: r.top, width: r.width, height: r.height };
   composer.pinX = e.clientX;
   composer.pinY = e.clientY;
+  composer.dialogX = e.clientX + 12;
+  composer.dialogY = e.clientY + 12;
   composer.primary = sel;
   composer.additional = [];
   composer.body = "";
@@ -324,8 +356,8 @@ function clamp01(n: number): number {
 }
 
 const composerStyle = computed(() => ({
-  left: Math.min(window.innerWidth - 340, composer.pinX + 12) + "px",
-  top: Math.min(window.innerHeight - 220, composer.pinY + 12) + "px",
+  left: Math.min(window.innerWidth - 340, Math.max(0, composer.dialogX)) + "px",
+  top: Math.min(window.innerHeight - 220, Math.max(0, composer.dialogY)) + "px",
 }));
 
 // Recompute on every overlay tick (scroll, resize, DOM mutation) so the
@@ -369,7 +401,13 @@ onBeforeUnmount(() => {
       :style="composerStyle"
       @click.stop
     >
-      <div class="sn-composer-target">
+      <div
+        class="sn-composer-target"
+        @pointerdown="onDialogPointerDown"
+        @pointermove="onDialogPointerMove"
+        @pointerup="onDialogPointerUp"
+        @pointercancel="onDialogPointerUp"
+      >
         <div class="sn-composer-primary">
           {{ composer.primary?.component_path }}:{{ composer.primary?.component_line }} (#{{
             composer.primary?.component_index
@@ -432,6 +470,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  cursor: move;
+  user-select: none;
+  touch-action: none;
 }
 .sn-composer-primary {
   font-size: 11px;

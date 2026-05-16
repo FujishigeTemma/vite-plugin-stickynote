@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, ref, watch } from "vue";
 import { ELEMENT_MAP_KEY, TICK_KEY } from "../cache.ts";
-import { findElementInMap } from "../inspector.ts";
+import { findThreadAnchor } from "../inspector.ts";
 import { useStore } from "../store-inject.ts";
 import type { Thread } from "../types.ts";
 
@@ -14,22 +14,31 @@ const elementMap = inject(ELEMENT_MAP_KEY);
 const position = ref<{ x: number; y: number } | null>(null);
 const stale = ref(false);
 
+const dragPos = ref<{ x: number; y: number } | null>(null);
+const dragging = computed(() => dragPos.value !== null);
+
+const DRAG_THRESHOLD = 4;
+let dragStart: { x: number; y: number } | null = null;
+let anchorRectAtStart: DOMRect | null = null;
+
+const canDrag = computed(
+  () => props.thread.component_path != null && props.thread.component_line != null,
+);
+
+function findAnchor(): Element | null {
+  const map = elementMap?.value;
+  if (!map) return null;
+  return findThreadAnchor(props.thread, map);
+}
+
 function compute(): void {
-  if (props.thread.component_path == null || props.thread.component_line == null) {
-    // Page-wide pin: anchor to top-right of viewport.
+  if (dragging.value) return;
+  if (!canDrag.value) {
     position.value = { x: window.innerWidth - 60, y: 80 };
     stale.value = false;
     return;
   }
-  const map = elementMap?.value;
-  const el = map
-    ? findElementInMap(
-        map,
-        props.thread.component_path,
-        props.thread.component_line,
-        props.thread.component_index,
-      )
-    : null;
+  const el = findAnchor();
   if (!el) {
     position.value = null;
     stale.value = true;
@@ -43,7 +52,6 @@ function compute(): void {
   stale.value = false;
 }
 
-// Recompute whenever the overlay cache fires a tick (scroll, resize, DOM).
 watch(
   () => tick?.value ?? 0,
   () => compute(),
@@ -56,24 +64,96 @@ const label = computed(() => {
   return list ? list.length : 1;
 });
 
+const displayPos = computed(() => dragPos.value ?? position.value);
+
 function open(): void {
   void store.openThread(props.thread.id);
+}
+
+function clamp01(n: number): number {
+  return Math.max(0, Math.min(1, n));
+}
+
+function onPointerDown(e: PointerEvent): void {
+  if (e.button !== 0) return;
+  dragStart = { x: e.clientX, y: e.clientY };
+  if (canDrag.value) {
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+  }
+}
+
+function onPointerMove(e: PointerEvent): void {
+  if (!dragStart) return;
+  if (!dragging.value) {
+    if (!canDrag.value) return;
+    const dx = e.clientX - dragStart.x;
+    const dy = e.clientY - dragStart.y;
+    if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+    const el = findAnchor();
+    if (!el) return;
+    anchorRectAtStart = el.getBoundingClientRect();
+    e.preventDefault();
+  }
+  dragPos.value = { x: e.clientX, y: e.clientY };
+}
+
+function resetDrag(): void {
+  dragPos.value = null;
+  dragStart = null;
+  anchorRectAtStart = null;
+}
+
+function onPointerUp(e: PointerEvent): void {
+  const wasDragging = dragging.value;
+  const target = e.currentTarget as Element;
+  if (target.hasPointerCapture?.(e.pointerId)) {
+    target.releasePointerCapture?.(e.pointerId);
+  }
+  if (!wasDragging) {
+    resetDrag();
+    open();
+    return;
+  }
+  const r = anchorRectAtStart;
+  const pos = dragPos.value;
+  if (r && pos && r.width > 0 && r.height > 0) {
+    const xr = clamp01((pos.x - r.left) / r.width);
+    const yr = clamp01((pos.y - r.top) / r.height);
+    void store.updateThreadPosition(props.thread, xr, yr);
+  }
+  resetDrag();
+  // Store splice doesn't fire `tick`, so position would stay stale until the next scroll/resize.
+  compute();
+}
+
+function onPointerCancel(e: PointerEvent): void {
+  const target = e.currentTarget as Element;
+  if (target.hasPointerCapture?.(e.pointerId)) {
+    target.releasePointerCapture?.(e.pointerId);
+  }
+  resetDrag();
+  compute();
 }
 </script>
 
 <template>
   <button
-    v-if="position"
+    v-if="displayPos"
     type="button"
     class="sn-pin"
     :class="{
       'sn-pin-resolved': props.thread.status === 'resolved',
       'sn-pin-stale': stale,
       'sn-pin-open': isOpen,
+      'sn-pin-draggable': canDrag,
+      'sn-pin-dragging': dragging,
     }"
-    :style="{ left: position.x + 'px', top: position.y + 'px' }"
+    :style="{ left: displayPos.x + 'px', top: displayPos.y + 'px' }"
     :title="`${props.thread.created_by_name}: ${label} comment(s)`"
-    @click="open"
+    @pointerdown="onPointerDown"
+    @pointermove="onPointerMove"
+    @pointerup="onPointerUp"
+    @pointercancel="onPointerCancel"
   >
     {{ label }}
   </button>

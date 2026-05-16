@@ -85,16 +85,19 @@ export function findElementInMap(
   return matches[index] ?? null;
 }
 
+export function findThreadAnchor(thread: Thread, elementMap: ElementMap): Element | null {
+  if (thread.component_path == null || thread.component_line == null) return null;
+  return findElementInMap(
+    elementMap,
+    thread.component_path,
+    thread.component_line,
+    thread.component_index,
+  );
+}
+
 export function isThreadStale(thread: Thread, elementMap: ElementMap): boolean {
   if (thread.component_path == null || thread.component_line == null) return false;
-  return (
-    findElementInMap(
-      elementMap,
-      thread.component_path,
-      thread.component_line,
-      thread.component_index,
-    ) == null
-  );
+  return findThreadAnchor(thread, elementMap) == null;
 }
 
 export function componentName(path: string): string {

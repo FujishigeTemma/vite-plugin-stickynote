@@ -24,6 +24,7 @@ export type StickynoteStore = {
   loadComments: (threadId: string) => Promise<void>;
   openThread: (id: string | null) => Promise<void>;
   toggleResolved: (thread: Thread) => Promise<void>;
+  updateThreadPosition: (thread: Thread, x_ratio: number, y_ratio: number) => Promise<void>;
   createThread: (
     input: Omit<Parameters<ApiClient["createThread"]>[0], "route" | "url">,
   ) => Promise<Thread>;
@@ -82,6 +83,26 @@ export function createStore(options: OverlayOptions, api: ApiClient): Stickynote
     if (!updated) return;
     const i = threads.value.findIndex((t) => t.id === thread.id);
     if (i >= 0) threads.value.splice(i, 1, updated);
+  }
+
+  async function updateThreadPosition(
+    thread: Thread,
+    x_ratio: number,
+    y_ratio: number,
+  ): Promise<void> {
+    const i = threads.value.findIndex((t) => t.id === thread.id);
+    if (i < 0) return;
+    const prev = threads.value[i];
+    threads.value.splice(i, 1, { ...prev, x_ratio, y_ratio });
+    let final: Thread = prev;
+    try {
+      final = (await api.updatePosition(thread.id, x_ratio, y_ratio)) ?? prev;
+    } catch (err) {
+      console.error("[stickynote] updatePosition failed", err);
+    }
+    // Re-find: `refreshThreads` may have replaced the array while awaiting.
+    const j = threads.value.findIndex((t) => t.id === thread.id);
+    if (j >= 0) threads.value.splice(j, 1, final);
   }
 
   async function createThread(
@@ -161,6 +182,7 @@ export function createStore(options: OverlayOptions, api: ApiClient): Stickynote
     loadComments,
     openThread,
     toggleResolved,
+    updateThreadPosition,
     createThread,
     reply,
     editComment,

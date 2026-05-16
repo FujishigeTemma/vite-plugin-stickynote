@@ -5,6 +5,7 @@ import {
   CreateThreadSchema,
   IdParamSchema,
   ListThreadsQuerySchema,
+  UpdateThreadPositionSchema,
   UpdateThreadStatusSchema,
 } from "../schemas.ts";
 import type { CommentRow, Env, ThreadRow, Variables } from "../types.ts";
@@ -116,6 +117,25 @@ export const threadsRoutes = new Hono<{
         "UPDATE threads SET status = ?, updated_at = ? WHERE id = ?",
       )
         .bind(status, nowISO(), id)
+        .run();
+      if (!result.meta.changes) return c.json({ error: "not_found" }, 404);
+      const thread = await c.env.DB.prepare("SELECT * FROM threads WHERE id = ?")
+        .bind(id)
+        .first<ThreadRow>();
+      return c.json({ thread: thread ? hydrateThread(thread) : null });
+    },
+  )
+  .patch(
+    "/:id/position",
+    vValidator("param", IdParamSchema),
+    vValidator("json", UpdateThreadPositionSchema),
+    async (c) => {
+      const { id } = c.req.valid("param");
+      const { x_ratio, y_ratio } = c.req.valid("json");
+      const result = await c.env.DB.prepare(
+        "UPDATE threads SET x_ratio = ?, y_ratio = ?, updated_at = ? WHERE id = ?",
+      )
+        .bind(x_ratio, y_ratio, nowISO(), id)
         .run();
       if (!result.meta.changes) return c.json({ error: "not_found" }, 404);
       const thread = await c.env.DB.prepare("SELECT * FROM threads WHERE id = ?")
