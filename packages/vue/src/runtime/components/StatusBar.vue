@@ -14,7 +14,6 @@ function togglePanel(): void {
 
 <template>
   <div class="sn-statusbar">
-    <span class="sn-title">stickynote</span>
     <span v-if="dirtyBadge" class="sn-badge">{{ dirtyBadge }}</span>
     <span class="sn-commit">{{ shortCommit }}</span>
     <button
@@ -36,6 +35,7 @@ function togglePanel(): void {
   display: flex;
   gap: 6px;
   align-items: center;
+  line-height: 1;
   padding: 6px 10px;
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid rgba(0, 0, 0, 0.1);
@@ -58,9 +58,6 @@ function togglePanel(): void {
 .sn-statusbar button.sn-active {
   background: #ede9fe;
   color: #5b21b6;
-}
-.sn-title {
-  font-weight: 600;
 }
 .sn-commit {
   font-family: ui-monospace, monospace;
