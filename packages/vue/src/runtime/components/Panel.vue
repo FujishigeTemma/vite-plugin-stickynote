@@ -53,7 +53,6 @@ function toggleResolved(): void {
   display: flex;
   flex-direction: column;
   font-size: 13px;
-  z-index: 2147483080;
 }
 .sn-panel-header {
   padding: 12px 16px;

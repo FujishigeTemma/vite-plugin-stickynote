@@ -70,19 +70,31 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <!-- DOM order inside `.sn-root` *is* the stack order. Earlier siblings
+  render behind later ones. Inspector prepends its imperative hover /
+  selection overlays into this root, so they sit at the very bottom; the
+  composer is teleported into the trailing `.sn-composer-layer` so it sits at
+  the very top, above pins, the panel, and the highlights. -->
   <div v-if="props.store.active.value" class="sn-root">
     <Inspector />
     <PinLayer />
     <StalePinTray />
     <StatusBar />
     <Panel />
+    <div class="sn-composer-layer" />
   </div>
 </template>
 
 <style scoped>
+/* The single "escape the host page" stacking context for the entire plugin
+UI. All overlays (highlights, pins, panel, composer, status bar) live inside
+this root and rely on DOM order — not z-index — to settle their relative
+stacking. The big z-index value here only exists to clear arbitrary host-page
+z-indices; do not add more global z-indices elsewhere in the plugin. */
 .sn-root {
   position: fixed;
   inset: 0;
+  isolation: isolate;
   pointer-events: none;
   z-index: 2147483000;
   font-family:
@@ -93,6 +105,11 @@ onBeforeUnmount(() => {
   color: #111827;
   font-size: 13px;
   line-height: 1.4;
+}
+.sn-composer-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 </style>
 
@@ -126,7 +143,6 @@ prevents collision with host-page CSS. -->
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2147483050;
 }
 .sn-pin.sn-pin-resolved {
   background: #10b981;

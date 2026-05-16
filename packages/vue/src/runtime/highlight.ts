@@ -1,11 +1,12 @@
 // Imperative light-DOM highlight overlay, modelled on Vue Devtools'
-// component-highlighter. Lives in document.body (not the Shadow DOM) so it
-// reliably positions against the host page viewport without containing-block
-// or shadow-tree quirks.
+// component-highlighter. Lives inside `.sn-root` (prepended) so it shares the
+// plugin's single stacking context: stack order against the composer / pins /
+// panel is decided by DOM order, no internal z-index needed.
 
 const CONTAINER_ID = "__stickynote-inspect-container__";
 const CARD_ID = "__stickynote-inspect-card__";
 const SELECTION_CONTAINER_ID = "__stickynote-selection-container__";
+const ROOT_SELECTOR = ".sn-root";
 
 // Two label modes share the rect overlay:
 // - "info" is the default hover label (component name + source location)
@@ -23,7 +24,6 @@ export type HighlightOptions = {
 const containerStyle: Partial<CSSStyleDeclaration> = {
   display: "block",
   position: "fixed",
-  zIndex: "2147483640",
   backgroundColor: "rgba(139, 92, 246, 0.08)",
   border: "2px solid #8b5cf6",
   borderRadius: "2px",
@@ -51,7 +51,9 @@ const cardStyle: Partial<CSSStyleDeclaration> = {
   pointerEvents: "none",
 };
 
-function buildContainer(): HTMLDivElement {
+function buildContainer(): HTMLDivElement | null {
+  const root = document.querySelector(ROOT_SELECTOR);
+  if (!root) return null;
   const el = document.createElement("div");
   el.id = CONTAINER_ID;
   el.setAttribute("data-stickynote-ignore", "");
@@ -60,7 +62,13 @@ function buildContainer(): HTMLDivElement {
   card.id = CARD_ID;
   Object.assign(card.style, cardStyle);
   el.appendChild(card);
-  document.body.appendChild(el);
+  // Keep both highlight containers at the bottom of `.sn-root` (so pins /
+  // composer / panel naturally render above), but place the hover container
+  // immediately after the selection container so hover stays on top of
+  // selection — matches the previous z-index ordering.
+  const selection = document.getElementById(SELECTION_CONTAINER_ID);
+  if (selection && selection.parentElement === root) selection.after(el);
+  else root.prepend(el);
   return el;
 }
 
@@ -70,6 +78,7 @@ function getContainer(): HTMLDivElement | null {
 
 export function showHighlight(opts: HighlightOptions): void {
   const container = getContainer() ?? buildContainer();
+  if (!container) return;
   container.style.display = "block";
   container.style.left = `${Math.round(opts.rect.left * 100) / 100}px`;
   container.style.top = `${Math.round(opts.rect.top * 100) / 100}px`;
@@ -126,7 +135,6 @@ const selectionContainerStyle: Partial<CSSStyleDeclaration> = {
   position: "fixed",
   inset: "0",
   pointerEvents: "none",
-  zIndex: "2147483630",
 };
 
 const selectionItemStyle: Partial<CSSStyleDeclaration> = {
@@ -155,19 +163,28 @@ const selectionLabelStyle: Partial<CSSStyleDeclaration> = {
   pointerEvents: "none",
 };
 
-function ensureSelectionContainer(): HTMLDivElement {
+function ensureSelectionContainer(): HTMLDivElement | null {
   let el = document.getElementById(SELECTION_CONTAINER_ID) as HTMLDivElement | null;
   if (el) return el;
+  const root = document.querySelector(ROOT_SELECTOR);
+  if (!root) return null;
   el = document.createElement("div");
   el.id = SELECTION_CONTAINER_ID;
   el.setAttribute("data-stickynote-ignore", "");
   Object.assign(el.style, selectionContainerStyle);
-  document.body.appendChild(el);
+  // Prepend so the selection layer also stays at the bottom of `.sn-root`.
+  // Inserted after the hover highlight container (which prepends as well),
+  // so hover ends up immediately below selection in DOM order — selection
+  // therefore renders just above the hover rect, matching prior behaviour.
+  const hover = document.getElementById(CONTAINER_ID);
+  if (hover && hover.parentElement === root) root.insertBefore(el, hover);
+  else root.prepend(el);
   return el;
 }
 
 export function showSelectionHighlights(items: SelectionRect[]): void {
   const container = ensureSelectionContainer();
+  if (!container) return;
   const keep = new Set(items.map((i) => i.key));
   for (const child of Array.from(container.children)) {
     if (!keep.has((child as HTMLElement).dataset.key ?? "")) child.remove();
