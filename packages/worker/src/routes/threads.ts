@@ -9,6 +9,25 @@ import {
 } from "../schemas.ts";
 import type { CommentRow, Env, ThreadRow, Variables } from "../types.ts";
 
+type AdditionalComponent = { path: string; line: number; index: number };
+
+// Hydrate the JSON-serialized additional_components column into a real array
+// for the client. Returning the raw string would leak storage details into
+// the hono RPC type and force every caller to JSON.parse.
+function hydrateThread(row: ThreadRow) {
+  const { additional_components, ...rest } = row;
+  let parsed: AdditionalComponent[] = [];
+  if (additional_components) {
+    try {
+      const v = JSON.parse(additional_components);
+      if (Array.isArray(v)) parsed = v as AdditionalComponent[];
+    } catch {
+      parsed = [];
+    }
+  }
+  return { ...rest, additional_components: parsed };
+}
+
 export const threadsRoutes = new Hono<{
   Bindings: Env;
   Variables: Variables;
@@ -28,7 +47,7 @@ export const threadsRoutes = new Hono<{
     const { results } = await c.env.DB.prepare(sql)
       .bind(...binds)
       .all<ThreadRow>();
-    return c.json({ threads: results });
+    return c.json({ threads: results.map(hydrateThread) });
   })
   .post("/", vValidator("json", CreateThreadSchema), async (c) => {
     const user = c.get("user");
@@ -37,13 +56,19 @@ export const threadsRoutes = new Hono<{
     const commentId = newCommentId().toString();
     const now = nowISO();
 
+    const additionalJson =
+      body.additional_components && body.additional_components.length > 0
+        ? JSON.stringify(body.additional_components)
+        : null;
+
     await c.env.DB.batch([
       c.env.DB.prepare(
         `INSERT INTO threads (
           id, route, url, component_path, component_line, component_index,
           commit_hash, dirty_build, x_ratio, y_ratio, viewport_w, viewport_h,
+          additional_components,
           status, created_by, created_by_name, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`,
       ).bind(
         threadId,
         body.route,
@@ -57,6 +82,7 @@ export const threadsRoutes = new Hono<{
         body.y_ratio,
         body.viewport_w,
         body.viewport_h,
+        additionalJson,
         user.sub,
         user.name,
         now,
@@ -74,7 +100,10 @@ export const threadsRoutes = new Hono<{
         .bind(threadId)
         .all<CommentRow>(),
     ]);
-    return c.json({ thread, comments: comments.results }, 201);
+    return c.json(
+      { thread: thread ? hydrateThread(thread) : null, comments: comments.results },
+      201,
+    );
   })
   .patch(
     "/:id/status",
@@ -92,7 +121,7 @@ export const threadsRoutes = new Hono<{
       const thread = await c.env.DB.prepare("SELECT * FROM threads WHERE id = ?")
         .bind(id)
         .first<ThreadRow>();
-      return c.json({ thread });
+      return c.json({ thread: thread ? hydrateThread(thread) : null });
     },
   )
   .delete("/:id", vValidator("param", IdParamSchema), async (c) => {

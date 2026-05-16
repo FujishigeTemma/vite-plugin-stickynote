@@ -41,6 +41,16 @@ const componentLabel = computed(() => {
   return `${componentName(thread.value.component_path)} · ${thread.value.component_path}:${thread.value.component_line}`;
 });
 
+const additionalLinks = computed(() => {
+  const t = thread.value;
+  if (!t || !t.additional_components || t.additional_components.length === 0) return [];
+  return t.additional_components.map((c) => ({
+    key: `${c.path}:${c.line}#${c.index}`,
+    label: `${componentName(c.path)} · ${c.path}:${c.line}`,
+    url: buildGithubUrl(store.options.githubRepo, t.commit_hash, c.path, c.line),
+  }));
+});
+
 async function reply(body: string): Promise<void> {
   if (!thread.value) return;
   await store.reply(thread.value.id, body);
@@ -65,6 +75,12 @@ function back(): void {
       <span v-if="thread.dirty_build" class="sn-badge">local changes</span>
       <span v-if="viewportWarn" class="sn-badge">viewport differs</span>
     </div>
+    <ul v-if="additionalLinks.length" class="sn-detail-linked">
+      <li v-for="link in additionalLinks" :key="link.key">
+        <span>{{ link.label }}</span>
+        <a v-if="link.url" :href="link.url" target="_blank" rel="noopener">github</a>
+      </li>
+    </ul>
     <div class="sn-comments">
       <CommentItem v-for="c in comments" :key="c.id" :comment="c" />
     </div>
@@ -104,5 +120,23 @@ function back(): void {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.sn-detail-linked {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: #6b7280;
+}
+.sn-detail-linked li {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.sn-detail-linked a {
+  color: #3b82f6;
 }
 </style>

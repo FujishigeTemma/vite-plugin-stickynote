@@ -1,13 +1,22 @@
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, onMounted, reactive, watch } from "vue";
-import { TICK_KEY } from "../cache.ts";
-import { hideHighlight, removeHighlight, showHighlight } from "../highlight.ts";
+import { ELEMENT_MAP_KEY, TICK_KEY } from "../cache.ts";
+import {
+  clearSelectionHighlights,
+  hideHighlight,
+  removeHighlight,
+  showHighlight,
+  showSelectionHighlights,
+  type SelectionRect,
+} from "../highlight.ts";
 import {
   buildGithubUrl,
   componentName,
+  findElementInMap,
   findOccurrenceIndex,
   parseInspector,
 } from "../inspector.ts";
+import { isJumpModifier } from "../platform.ts";
 import { useStore } from "../store-inject.ts";
 import {
   ancestorChain,
@@ -20,6 +29,13 @@ import {
 
 const store = useStore();
 const tick = inject(TICK_KEY);
+const elementMap = inject(ELEMENT_MAP_KEY);
+
+type SelectedComponent = {
+  component_path: string;
+  component_line: number;
+  component_index: number;
+};
 
 const composer = reactive<{
   visible: boolean;
@@ -28,11 +44,8 @@ const composer = reactive<{
   rect: { left: number; top: number; width: number; height: number } | null;
   pinX: number;
   pinY: number;
-  target: {
-    component_path: string | null;
-    component_line: number | null;
-    component_index: number;
-  } | null;
+  primary: SelectedComponent | null;
+  additional: SelectedComponent[];
 }>({
   visible: false,
   body: "",
@@ -40,12 +53,14 @@ const composer = reactive<{
   rect: null,
   pinX: 0,
   pinY: 0,
-  target: null,
+  primary: null,
+  additional: [],
 });
 
 let lastEvent: MouseEvent | null = null;
 let altHeld = false;
-let shiftHeld = false;
+let metaHeld = false;
+let ctrlHeld = false;
 
 function eventInOverlay(e: Event): boolean {
   return e
@@ -67,8 +82,15 @@ function pickInstance(e: MouseEvent): Instance | null {
   return chain[1] ?? owner;
 }
 
+function jumpModifierActive(e?: MouseEvent | KeyboardEvent): boolean {
+  return isJumpModifier({
+    metaKey: metaHeld || !!e?.metaKey,
+    ctrlKey: ctrlHeld || !!e?.ctrlKey,
+  });
+}
+
 function renderHighlight(): void {
-  if (composer.visible || !lastEvent) {
+  if (!lastEvent) {
     hideHighlight();
     return;
   }
@@ -93,7 +115,7 @@ function renderHighlight(): void {
     ? buildGithubUrl(store.options.githubRepo, store.options.commitHash, info.path, info.line)
     : null;
   const rect = { left: r.left, top: r.top, width: r.width, height: r.height };
-  if ((lastEvent.shiftKey || shiftHeld) && info && githubUrl) {
+  if (jumpModifierActive(lastEvent) && info && githubUrl) {
     showHighlight({
       rect,
       mode: "jump",
@@ -121,8 +143,12 @@ function onKey(e: KeyboardEvent): void {
     altHeld = e.type === "keydown";
     renderHighlight();
   }
-  if (e.key === "Shift") {
-    shiftHeld = e.type === "keydown";
+  if (e.key === "Meta") {
+    metaHeld = e.type === "keydown";
+    renderHighlight();
+  }
+  if (e.key === "Control") {
+    ctrlHeld = e.type === "keydown";
     renderHighlight();
   }
   if (e.key === "Escape") {
@@ -131,8 +157,25 @@ function onKey(e: KeyboardEvent): void {
   }
 }
 
+// Modifier keyup is lost when the window blurs (Cmd+Tab etc.), so flags
+// would otherwise stick "true" and leave the highlight in jump mode forever.
+function onWindowBlur(): void {
+  altHeld = metaHeld = ctrlHeld = false;
+  renderHighlight();
+}
+
+function sameComponent(a: SelectedComponent, b: SelectedComponent): boolean {
+  return (
+    a.component_path === b.component_path &&
+    a.component_line === b.component_line &&
+    a.component_index === b.component_index
+  );
+}
+
 function onClickCapture(e: MouseEvent): void {
   if (eventInOverlay(e)) return;
+  // capture-phase preventDefault also suppresses host <a> navigation, so
+  // the jump path's window.open is the only navigation that runs.
   e.preventDefault();
   e.stopPropagation();
   e.stopImmediatePropagation();
@@ -142,11 +185,11 @@ function onClickCapture(e: MouseEvent): void {
   const info = data ? parseInspector(data) : null;
   if (!info || !data) return;
 
-  // Shift+click jumps to source on GitHub instead of opening the composer.
-  // The hover label can't host a clickable link (it follows the cursor and
+  // Cmd (mac) / Ctrl (win/linux) + click: jump to source on GitHub. The
+  // hover label can't host a clickable link (it follows the cursor and
   // would disappear before reaching it), so the affordance lives on the
   // highlighted rect itself via this modifier.
-  if (e.shiftKey) {
+  if (jumpModifierActive(e)) {
     const url = buildGithubUrl(
       store.options.githubRepo,
       store.options.commitHash,
@@ -157,25 +200,38 @@ function onClickCapture(e: MouseEvent): void {
     return;
   }
 
-  const r = instanceRect(inst);
-  if (!r) return;
-
-  // findOccurrenceIndex needs a real element with the attribute. The
-  // instance's first inspector-tagged descendant is the anchor.
   const anchor = (inst.subTree?.el ?? inst.vnode?.el) as Element | null;
   const targetEl = findAnchorElement(anchor, data) ?? document.body;
-
-  composer.rect = { left: r.left, top: r.top, width: r.width, height: r.height };
-  composer.pinX = e.clientX;
-  composer.pinY = e.clientY;
-  composer.target = {
+  const sel: SelectedComponent = {
     component_path: info.path,
     component_line: info.line,
     component_index: findOccurrenceIndex(targetEl, data),
   };
+
+  // Shift+click with composer open: Finder-style multi-select. Toggle the
+  // component in/out of the additional list (primary is fixed because it
+  // anchors the pin coordinates).
+  if (e.shiftKey && composer.visible && composer.primary) {
+    if (sameComponent(composer.primary, sel)) return;
+    const i = composer.additional.findIndex((c) => sameComponent(c, sel));
+    if (i >= 0) composer.additional.splice(i, 1);
+    else composer.additional.push(sel);
+    refreshSelectionHighlights();
+    return;
+  }
+
+  // Plain click (or shift+click with no composer): open a new composer for
+  // this single component. Any in-progress composer is discarded.
+  const r = instanceRect(inst);
+  if (!r) return;
+  composer.rect = { left: r.left, top: r.top, width: r.width, height: r.height };
+  composer.pinX = e.clientX;
+  composer.pinY = e.clientY;
+  composer.primary = sel;
+  composer.additional = [];
   composer.body = "";
   composer.visible = true;
-  hideHighlight();
+  refreshSelectionHighlights();
 }
 
 function findAnchorElement(start: Element | null, data: string): Element | null {
@@ -184,31 +240,72 @@ function findAnchorElement(start: Element | null, data: string): Element | null 
   return start.querySelector?.(`[data-v-inspector="${CSS.escape(data)}"]`) ?? null;
 }
 
+function refreshSelectionHighlights(): void {
+  if (!composer.visible || !composer.primary) {
+    clearSelectionHighlights();
+    return;
+  }
+  const map = elementMap?.value;
+  if (!map) {
+    clearSelectionHighlights();
+    return;
+  }
+  const items: SelectionRect[] = [];
+  const all: Array<SelectedComponent & { primary: boolean }> = [
+    { ...composer.primary, primary: true },
+    ...composer.additional.map((c) => ({ ...c, primary: false })),
+  ];
+  for (const c of all) {
+    const el = findElementInMap(map, c.component_path, c.component_line, c.component_index);
+    if (!el) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) continue;
+    items.push({
+      key: `${c.component_path}:${c.component_line}#${c.component_index}`,
+      rect: { left: r.left, top: r.top, width: r.width, height: r.height },
+      label: `${c.primary ? "★ " : ""}${componentName(c.component_path)}`,
+    });
+  }
+  showSelectionHighlights(items);
+}
+
+function removeAdditional(i: number): void {
+  composer.additional.splice(i, 1);
+  refreshSelectionHighlights();
+}
+
 function closeComposer(): void {
   composer.visible = false;
-  composer.target = null;
+  composer.primary = null;
+  composer.additional = [];
   composer.rect = null;
   composer.body = "";
   composer.saving = false;
+  clearSelectionHighlights();
 }
 
 async function submitComposer(): Promise<void> {
-  if (!composer.target || !composer.rect) return;
+  if (!composer.primary || !composer.rect) return;
   if (!composer.body.trim()) return;
   composer.saving = true;
   const x_ratio = (composer.pinX - composer.rect.left) / composer.rect.width;
   const y_ratio = (composer.pinY - composer.rect.top) / composer.rect.height;
   try {
     await store.createThread({
-      component_path: composer.target.component_path,
-      component_line: composer.target.component_line,
-      component_index: composer.target.component_index,
+      component_path: composer.primary.component_path,
+      component_line: composer.primary.component_line,
+      component_index: composer.primary.component_index,
       commit_hash: store.options.commitHash,
       dirty_build: store.options.dirtyBuild,
       x_ratio: clamp01(x_ratio),
       y_ratio: clamp01(y_ratio),
       viewport_w: window.innerWidth,
       viewport_h: window.innerHeight,
+      additional_components: composer.additional.map((c) => ({
+        path: c.component_path,
+        line: c.component_line,
+        index: c.component_index,
+      })),
       body: composer.body,
     });
     closeComposer();
@@ -229,14 +326,21 @@ const composerStyle = computed(() => ({
 }));
 
 // Recompute on every overlay tick (scroll, resize, DOM mutation) so the
-// highlight follows the source element instead of disappearing.
-watch(() => tick?.value ?? 0, renderHighlight);
+// highlight and selection rects follow their source elements.
+watch(
+  () => tick?.value ?? 0,
+  () => {
+    renderHighlight();
+    refreshSelectionHighlights();
+  },
+);
 
 onMounted(() => {
   document.addEventListener("mouseover", onMouseOver, true);
   document.addEventListener("click", onClickCapture, true);
   window.addEventListener("keydown", onKey);
   window.addEventListener("keyup", onKey);
+  window.addEventListener("blur", onWindowBlur);
 });
 
 onBeforeUnmount(() => {
@@ -244,6 +348,7 @@ onBeforeUnmount(() => {
   document.removeEventListener("click", onClickCapture, true);
   window.removeEventListener("keydown", onKey);
   window.removeEventListener("keyup", onKey);
+  window.removeEventListener("blur", onWindowBlur);
   removeHighlight();
 });
 </script>
@@ -256,9 +361,31 @@ onBeforeUnmount(() => {
     @click.stop
   >
     <div class="sn-composer-target">
-      {{ composer.target?.component_path }}:{{ composer.target?.component_line }} (#{{
-        composer.target?.component_index
-      }})
+      <div class="sn-composer-primary">
+        {{ composer.primary?.component_path }}:{{ composer.primary?.component_line }} (#{{
+          composer.primary?.component_index
+        }})
+      </div>
+      <div v-if="composer.additional.length" class="sn-composer-additional">
+        <div
+          v-for="(c, i) in composer.additional"
+          :key="`${c.component_path}:${c.component_line}#${c.component_index}`"
+          class="sn-chip"
+        >
+          <span class="sn-chip-text"
+            >{{ c.component_path }}:{{ c.component_line }} (#{{ c.component_index }})</span
+          >
+          <button
+            type="button"
+            class="sn-chip-remove"
+            aria-label="remove"
+            @click="removeAdditional(i)"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+      <div class="sn-composer-hint">shift+click to link more components</div>
     </div>
     <div class="sn-form">
       <textarea v-model="composer.body" placeholder="Leave a comment…" autofocus />
@@ -287,14 +414,55 @@ onBeforeUnmount(() => {
   padding: 12px;
   width: 320px;
   pointer-events: auto;
-  z-index: 2147483120;
+  z-index: 2147483646;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 .sn-composer-target {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sn-composer-primary {
   font-size: 11px;
-  color: #6b7280;
+  color: #374151;
   font-family: ui-monospace, monospace;
+}
+.sn-composer-additional {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sn-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #ede9fe;
+  border: 1px solid #c4b5fd;
+  border-radius: 4px;
+  padding: 2px 4px 2px 6px;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  color: #4c1d95;
+}
+.sn-chip-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sn-chip-remove {
+  background: transparent;
+  border: 0;
+  color: #6d28d9;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 4px;
+}
+.sn-composer-hint {
+  font-size: 10px;
+  color: #9ca3af;
 }
 </style>
