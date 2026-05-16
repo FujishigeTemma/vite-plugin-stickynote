@@ -14,4 +14,12 @@ export default defineConfig({
       devBearer: "stickynote-dev-token",
     }),
   ],
+  server: {
+    // The plugin resolves through a pnpm workspace symlink, and Vite's watcher
+    // skips node_modules by default. Un-ignore the linked package so edits to
+    // its runtime sources (served via virtual modules) trigger HMR.
+    watch: {
+      ignored: ["!**/node_modules/vite-plugin-stickynote/**"],
+    },
+  },
 });

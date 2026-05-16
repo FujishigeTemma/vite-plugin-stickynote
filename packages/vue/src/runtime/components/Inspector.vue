@@ -62,10 +62,13 @@ let altHeld = false;
 let metaHeld = false;
 let ctrlHeld = false;
 
+// `composedPath()` returns [] once an event finishes dispatching, and
+// `renderHighlight()` re-runs against `lastEvent` from a tick watcher, so a
+// path-based guard would let the plugin's own UI sneak through after the
+// first frame. The target node reference stays valid, so walk the DOM.
 function eventInOverlay(e: Event): boolean {
-  return e
-    .composedPath()
-    .some((n) => n instanceof Element && n.hasAttribute("data-stickynote-ignore"));
+  const t = e.target;
+  return t instanceof Element && !!t.closest("[data-stickynote-ignore]");
 }
 
 // Resolve the Vue component owning the hovered DOM element. Walks up via
