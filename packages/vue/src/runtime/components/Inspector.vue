@@ -357,54 +357,61 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div
-    v-if="composer.visible && composer.rect"
-    class="sn-composer-overlay"
-    :style="composerStyle"
-    @click.stop
-  >
-    <div class="sn-composer-target">
-      <div class="sn-composer-primary">
-        {{ composer.primary?.component_path }}:{{ composer.primary?.component_line }} (#{{
-          composer.primary?.component_index
-        }})
-      </div>
-      <div v-if="composer.additional.length" class="sn-composer-additional">
-        <div
-          v-for="(c, i) in composer.additional"
-          :key="`${c.component_path}:${c.component_line}#${c.component_index}`"
-          class="sn-chip"
-        >
-          <span class="sn-chip-text"
-            >{{ c.component_path }}:{{ c.component_line }} (#{{ c.component_index }})</span
+  <!-- Teleport to the trailing `.sn-composer-layer` inside `.sn-root` so the
+  composer ends up as the last DOM child of the plugin's stacking context —
+  naturally above the highlight overlays, pins, and panel without needing its
+  own z-index. `defer` lets Vue resolve the target after App.vue has rendered
+  it on the same tick. -->
+  <Teleport to=".sn-composer-layer" defer>
+    <div
+      v-if="composer.visible && composer.rect"
+      class="sn-composer-overlay"
+      :style="composerStyle"
+      @click.stop
+    >
+      <div class="sn-composer-target">
+        <div class="sn-composer-primary">
+          {{ composer.primary?.component_path }}:{{ composer.primary?.component_line }} (#{{
+            composer.primary?.component_index
+          }})
+        </div>
+        <div v-if="composer.additional.length" class="sn-composer-additional">
+          <div
+            v-for="(c, i) in composer.additional"
+            :key="`${c.component_path}:${c.component_line}#${c.component_index}`"
+            class="sn-chip"
           >
+            <span class="sn-chip-text"
+              >{{ c.component_path }}:{{ c.component_line }} (#{{ c.component_index }})</span
+            >
+            <button
+              type="button"
+              class="sn-chip-remove"
+              aria-label="remove"
+              @click="removeAdditional(i)"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+        <div class="sn-composer-hint">shift+click to link more components</div>
+      </div>
+      <div class="sn-form">
+        <textarea v-model="composer.body" placeholder="Leave a comment…" autofocus />
+        <div class="sn-form-actions">
+          <button type="button" @click="closeComposer">cancel</button>
           <button
             type="button"
-            class="sn-chip-remove"
-            aria-label="remove"
-            @click="removeAdditional(i)"
+            class="sn-primary"
+            :disabled="composer.saving || !composer.body.trim()"
+            @click="submitComposer"
           >
-            ×
+            {{ composer.saving ? "Saving…" : "Pin" }}
           </button>
         </div>
       </div>
-      <div class="sn-composer-hint">shift+click to link more components</div>
     </div>
-    <div class="sn-form">
-      <textarea v-model="composer.body" placeholder="Leave a comment…" autofocus />
-      <div class="sn-form-actions">
-        <button type="button" @click="closeComposer">cancel</button>
-        <button
-          type="button"
-          class="sn-primary"
-          :disabled="composer.saving || !composer.body.trim()"
-          @click="submitComposer"
-        >
-          {{ composer.saving ? "Saving…" : "Pin" }}
-        </button>
-      </div>
-    </div>
-  </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -417,7 +424,6 @@ onBeforeUnmount(() => {
   padding: 12px;
   width: 320px;
   pointer-events: auto;
-  z-index: 2147483646;
   display: flex;
   flex-direction: column;
   gap: 8px;
