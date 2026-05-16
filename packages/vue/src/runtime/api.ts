@@ -9,6 +9,7 @@ export type ApiClient = {
   listThreads: (opts?: { route?: string; includeResolved?: boolean }) => Promise<Thread[]>;
   createThread: (input: CreateThreadInput) => Promise<{ thread: Thread; comments: Comment[] }>;
   setStatus: (id: string, status: "open" | "resolved") => Promise<Thread | null>;
+  updatePosition: (id: string, x_ratio: number, y_ratio: number) => Promise<Thread | null>;
   deleteThread: (id: string) => Promise<void>;
   listComments: (threadId: string) => Promise<Comment[]>;
   createReply: (threadId: string, body: string) => Promise<Comment | null>;
@@ -68,6 +69,19 @@ export function createApi(baseUrl: string, getToken: AuthSource): ApiClient {
       });
       if (!res.ok) {
         await warn(`PATCH /api/threads/${id}/status`, res);
+        return null;
+      }
+      const data = await res.json();
+      return data.thread ?? null;
+    },
+
+    async updatePosition(id, x_ratio, y_ratio) {
+      const res = await client.api.threads[":id"].position.$patch({
+        param: { id },
+        json: { x_ratio, y_ratio },
+      });
+      if (!res.ok) {
+        await warn(`PATCH /api/threads/${id}/position`, res);
         return null;
       }
       const data = await res.json();

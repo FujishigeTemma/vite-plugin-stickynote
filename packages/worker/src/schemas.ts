@@ -28,6 +28,11 @@ export const UpdateThreadStatusSchema = v.object({
   status: v.picklist(["open", "resolved"]),
 });
 
+export const UpdateThreadPositionSchema = v.object({
+  x_ratio: v.pipe(v.number(), v.minValue(0), v.maxValue(1)),
+  y_ratio: v.pipe(v.number(), v.minValue(0), v.maxValue(1)),
+});
+
 export const ListThreadsQuerySchema = v.object({
   route: v.optional(v.string()),
   includeResolved: v.optional(v.picklist(["true", "false"])),

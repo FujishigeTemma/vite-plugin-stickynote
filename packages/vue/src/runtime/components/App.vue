@@ -143,6 +143,7 @@ prevents collision with host-page CSS. -->
   display: flex;
   align-items: center;
   justify-content: center;
+  touch-action: none;
 }
 .sn-pin.sn-pin-resolved {
   background: #10b981;
@@ -150,6 +151,13 @@ prevents collision with host-page CSS. -->
 .sn-pin.sn-pin-stale {
   background: #6b7280;
   opacity: 0.6;
+}
+.sn-pin.sn-pin-draggable {
+  cursor: grab;
+}
+.sn-pin.sn-pin-dragging {
+  cursor: grabbing;
+  transform: scale(1.1);
 }
 .sn-pin:hover {
   transform: scale(1.1);
