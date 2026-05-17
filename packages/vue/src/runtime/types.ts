@@ -3,8 +3,10 @@ import type { Client } from "./api-client.ts";
 
 export type Thread = InferResponseType<Client["api"]["threads"]["$get"], 200>["threads"][number];
 
+export type Component = Thread["components"][number];
+
 export type Comment = InferResponseType<
-  Client["api"]["threads"][":id"]["comments"]["$get"],
+  Client["api"]["threads"][":threadId"]["comments"]["$get"],
   200
 >["comments"][number];
 

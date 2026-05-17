@@ -15,14 +15,17 @@ import {
 import {
   buildGithubUrl,
   clamp,
+  componentKey,
   findElementInMap,
   findOccurrenceIndex,
   parseInspector,
+  sameComponent,
 } from "../inspector.ts";
 import { serverMutations } from "../mutations.ts";
 import { isJumpModifier } from "../platform.ts";
 import { queryClient } from "../query-client.ts";
 import { elementMap, openThreadId, options, tick, toggleActive } from "../state.ts";
+import type { Component } from "../types.ts";
 import {
   ancestorChain,
   findInstance,
@@ -35,12 +38,9 @@ import {
 const { threads } = useThreadsList();
 const createThread = useMutation(serverMutations.threads.create(), queryClient);
 
-type SelectedComponent = {
-  component_path: string;
-  component_line: number;
-  component_index: number;
-  component_name: string;
-};
+// Pre-persistence form of a component pick: server assigns `id` and
+// `display_order` at insert time.
+type SelectedComponent = Omit<Component, "id" | "display_order">;
 
 const composer = reactive<{
   visible: boolean;
@@ -49,8 +49,11 @@ const composer = reactive<{
   rect: { left: number; top: number; width: number; height: number } | null;
   pinX: number;
   pinY: number;
-  primary: SelectedComponent | null;
-  additional: SelectedComponent[];
+  // components[0] is the anchor (pin coords are relative to it) and cannot be
+  // removed; later entries are shift+click-added extras and can be toggled
+  // off. Empty only before the composer opens; the v-if on .sn-composer-overlay
+  // guards rendering until composer.visible flips true.
+  components: SelectedComponent[];
 }>({
   visible: false,
   body: "",
@@ -58,8 +61,7 @@ const composer = reactive<{
   rect: null,
   pinX: 0,
   pinY: 0,
-  primary: null,
-  additional: [],
+  components: [],
 });
 
 const composerEl = useTemplateRef<HTMLElement>("composerEl");
@@ -179,14 +181,6 @@ function onWindowBlur(): void {
   renderHighlight();
 }
 
-function sameComponent(a: SelectedComponent, b: SelectedComponent): boolean {
-  return (
-    a.component_path === b.component_path &&
-    a.component_line === b.component_line &&
-    a.component_index === b.component_index
-  );
-}
-
 function onClickCapture(e: MouseEvent): void {
   if (eventInOverlay(e)) return;
   // capture-phase preventDefault also suppresses host <a> navigation, so the
@@ -217,20 +211,21 @@ function onClickCapture(e: MouseEvent): void {
   const anchor = (inst.subTree?.el ?? inst.vnode?.el) as Element | null;
   const targetEl = findAnchorElement(anchor, data) ?? document.body;
   const sel: SelectedComponent = {
-    component_path: info.path,
-    component_line: info.line,
-    component_index: findOccurrenceIndex(targetEl, data),
-    component_name: instanceName(inst),
+    path: info.path,
+    line: info.line,
+    v_for_index: findOccurrenceIndex(targetEl, data),
+    name: instanceName(inst),
   };
 
   // Shift+click with composer open: Finder-style multi-select. Toggle the
-  // component in/out of the additional list (primary is fixed because it
-  // anchors the pin coordinates).
-  if (e.shiftKey && composer.visible && composer.primary) {
-    if (sameComponent(composer.primary, sel)) return;
-    const i = composer.additional.findIndex((c) => sameComponent(c, sel));
-    if (i >= 0) composer.additional.splice(i, 1);
-    else composer.additional.push(sel);
+  // component in/out of the components list. The first element is the pin
+  // anchor and cannot be removed by shift+clicking it again.
+  if (e.shiftKey && composer.visible && composer.components.length > 0) {
+    const primary = composer.components[0];
+    if (primary && sameComponent(primary, sel)) return;
+    const i = composer.components.findIndex((c, idx) => idx > 0 && sameComponent(c, sel));
+    if (i >= 0) composer.components.splice(i, 1);
+    else composer.components.push(sel);
     refreshSelectionHighlights();
     return;
   }
@@ -243,8 +238,7 @@ function onClickCapture(e: MouseEvent): void {
   composer.pinY = e.clientY;
   dialogX.value = Math.min(window.innerWidth - 340, Math.max(0, e.clientX + 12));
   dialogY.value = Math.min(window.innerHeight - 220, Math.max(0, e.clientY + 12));
-  composer.primary = sel;
-  composer.additional = [];
+  composer.components = [sel];
   composer.body = "";
   composer.visible = true;
   refreshSelectionHighlights();
@@ -258,73 +252,49 @@ function findAnchorElement(start: Element | null, data: string): Element | null 
 
 function refreshSelectionHighlights(): void {
   const map = elementMap.value;
-  const composerActive = composer.visible && composer.primary;
+  const composerActive = composer.visible && composer.components.length > 0;
   const openId = openThreadId.value;
   if (!composerActive && !openId) {
     clearSelectionHighlights();
     return;
   }
   // Composer takes priority over an open thread when both are present.
-  let all: Array<SelectedComponent & { primary: boolean }> | null = null;
-  if (composerActive && composer.primary) {
-    all = [
-      { ...composer.primary, primary: true },
-      ...composer.additional.map((c) => ({ ...c, primary: false })),
-    ];
+  // Both sources are pre-sorted such that index 0 is the pin anchor.
+  let source: SelectedComponent[] | null = null;
+  if (composerActive) {
+    source = composer.components;
   } else {
     const thread = openId ? threads.value.find((t) => t.id === openId) : null;
-    if (
-      thread &&
-      thread.component_path != null &&
-      thread.component_line != null &&
-      thread.component_name != null
-    ) {
-      all = [
-        {
-          component_path: thread.component_path,
-          component_line: thread.component_line,
-          component_index: thread.component_index,
-          component_name: thread.component_name,
-          primary: true,
-        },
-        ...(thread.additional_components ?? []).map((c) => ({
-          component_path: c.path,
-          component_line: c.line,
-          component_index: c.index,
-          component_name: c.name,
-          primary: false,
-        })),
-      ];
-    }
+    if (thread && thread.components.length > 0) source = thread.components;
   }
-  if (!all) {
+  if (!source) {
     clearSelectionHighlights();
     return;
   }
   const items: SelectionRect[] = [];
-  for (const c of all) {
-    const el = findElementInMap(map, c.component_path, c.component_line, c.component_index);
-    if (!el) continue;
+  source.forEach((c, idx) => {
+    const el = findElementInMap(map, c.path, c.line, c.v_for_index);
+    if (!el) return;
     const r = el.getBoundingClientRect();
-    if (r.width === 0 && r.height === 0) continue;
+    if (r.width === 0 && r.height === 0) return;
     items.push({
-      key: `${c.component_path}:${c.component_line}#${c.component_index}`,
+      key: componentKey(c),
       rect: { left: r.left, top: r.top, width: r.width, height: r.height },
-      label: `${c.primary ? "★ " : ""}${c.component_name}`,
+      label: `${idx === 0 ? "★ " : ""}${c.name}`,
     });
-  }
+  });
   showSelectionHighlights(items);
 }
 
 function removeAdditional(i: number): void {
-  composer.additional.splice(i, 1);
+  // i + 1 because index 0 is the pin anchor and cannot be removed.
+  composer.components.splice(i + 1, 1);
   refreshSelectionHighlights();
 }
 
 function closeComposer(): void {
   composer.visible = false;
-  composer.primary = null;
-  composer.additional = [];
+  composer.components = [];
   composer.rect = null;
   composer.body = "";
   composer.saving = false;
@@ -332,28 +302,25 @@ function closeComposer(): void {
 }
 
 function submitComposer(): void {
-  if (!composer.primary || !composer.rect || !options.value) return;
+  const primary = composer.components[0];
+  if (!primary || !composer.rect || !options.value) return;
   if (!composer.body.trim()) return;
   composer.saving = true;
   const x_ratio = (composer.pinX - composer.rect.left) / composer.rect.width;
   const y_ratio = (composer.pinY - composer.rect.top) / composer.rect.height;
   createThread.mutate(
     {
-      component_path: composer.primary.component_path,
-      component_line: composer.primary.component_line,
-      component_index: composer.primary.component_index,
-      component_name: composer.primary.component_name,
       commit_hash: options.value.commitHash,
       dirty_build: options.value.dirtyBuild,
       x_ratio: clamp(x_ratio),
       y_ratio: clamp(y_ratio),
       viewport_w: window.innerWidth,
       viewport_h: window.innerHeight,
-      additional_components: composer.additional.map((c) => ({
-        path: c.component_path,
-        line: c.component_line,
-        index: c.component_index,
-        name: c.component_name,
+      components: composer.components.map((c) => ({
+        path: c.path,
+        line: c.line,
+        v_for_index: c.v_for_index,
+        name: c.name,
       })),
       body: composer.body,
     },
@@ -368,6 +335,8 @@ const composerStyle = computed(() => ({
   left: Math.min(window.innerWidth - 340, Math.max(0, dialogX.value)) + "px",
   top: Math.min(window.innerHeight - 220, Math.max(0, dialogY.value)) + "px",
 }));
+
+const primaryComponent = computed(() => composer.components[0] ?? null);
 
 watch(tick, () => {
   renderHighlight();
@@ -393,7 +362,7 @@ onBeforeUnmount(() => removeHighlight());
   it on the same tick. -->
   <Teleport to=".sn-composer-layer" defer>
     <div
-      v-if="composer.visible && composer.rect"
+      v-if="composer.visible && composer.rect && primaryComponent"
       ref="composerEl"
       class="sn-composer-overlay"
       :style="composerStyle"
@@ -401,18 +370,19 @@ onBeforeUnmount(() => removeHighlight());
     >
       <div ref="composerHandleEl" class="sn-composer-target">
         <div class="sn-composer-primary">
-          {{ composer.primary?.component_path }}:{{ composer.primary?.component_line }} (#{{
-            composer.primary?.component_index
-          }})
+          ★ {{ primaryComponent.name }} · {{ primaryComponent.path }}:{{
+            primaryComponent.line
+          }}
+          (#{{ primaryComponent.v_for_index }})
         </div>
-        <div v-if="composer.additional.length" class="sn-composer-additional">
+        <div v-if="composer.components.length > 1" class="sn-composer-additional">
           <div
-            v-for="(c, i) in composer.additional"
-            :key="`${c.component_path}:${c.component_line}#${c.component_index}`"
+            v-for="(c, i) in composer.components.slice(1)"
+            :key="componentKey(c)"
             class="sn-chip"
           >
             <span class="sn-chip-text"
-              >{{ c.component_path }}:{{ c.component_line }} (#{{ c.component_index }})</span
+              >{{ c.name }} · {{ c.path }}:{{ c.line }} (#{{ c.v_for_index }})</span
             >
             <button
               type="button"

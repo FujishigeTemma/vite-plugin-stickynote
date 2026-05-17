@@ -16,8 +16,8 @@ const createThread = useMutation(serverMutations.threads.create(), queryClient);
 const showPageWideForm = ref(false);
 
 const grouped = computed(() => ({
-  pageWide: visible.value.filter((t) => t.component_path == null),
-  component: visible.value.filter((t) => t.component_path != null),
+  pageWide: visible.value.filter((t) => t.components.length === 0),
+  component: visible.value.filter((t) => t.components.length > 0),
 }));
 
 function isStale(t: Thread): boolean {
@@ -25,23 +25,19 @@ function isStale(t: Thread): boolean {
 }
 
 function compLabel(t: Thread): string {
-  if (!t.component_path) return "page-wide";
-  return t.component_name ?? "Anonymous";
+  return t.components[0]?.name ?? "page-wide";
 }
 
 async function createPageWide(body: string): Promise<void> {
   if (!options.value) return;
   await createThread.mutateAsync({
-    component_path: null,
-    component_line: null,
-    component_index: 0,
-    component_name: null,
     commit_hash: options.value.commitHash,
     dirty_build: options.value.dirtyBuild,
     x_ratio: 0,
     y_ratio: 0,
     viewport_w: window.innerWidth,
     viewport_h: window.innerHeight,
+    components: [],
     body,
   });
   showPageWideForm.value = false;

@@ -21,12 +21,15 @@ const editing = ref(false);
 const ownedByCurrent = computed(() => me.value?.sub === props.comment.created_by);
 
 function onEdit(body: string): void {
-  editComment.mutate({ id: props.comment.id, body }, { onSuccess: () => (editing.value = false) });
+  editComment.mutate(
+    { threadId: props.comment.thread_id, commentId: props.comment.id, body },
+    { onSuccess: () => (editing.value = false) },
+  );
 }
 
 function onDelete(): void {
   if (!confirm("Delete this comment?")) return;
-  deleteComment.mutate({ id: props.comment.id, threadId: props.comment.thread_id });
+  deleteComment.mutate({ threadId: props.comment.thread_id, commentId: props.comment.id });
 }
 </script>
 

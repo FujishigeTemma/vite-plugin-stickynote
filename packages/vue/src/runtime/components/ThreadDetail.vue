@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/vue-query";
 import { computed } from "vue";
 
 import { useThreadsList } from "../composables.ts";
-import { buildGithubUrl } from "../inspector.ts";
+import { buildGithubUrl, componentKey } from "../inspector.ts";
 import { serverMutations } from "../mutations.ts";
 import { serverQueries } from "../queries/server.ts";
 import { queryClient } from "../query-client.ts";
@@ -12,7 +12,7 @@ import CommentForm from "./CommentForm.vue";
 import CommentItem from "./CommentItem.vue";
 
 const { threads } = useThreadsList();
-const { data: comments } = useQuery(serverQueries.comments.list(openThreadId), queryClient);
+const { data: comments } = useQuery(serverQueries.threads.comments.list(openThreadId), queryClient);
 
 const reply = useMutation(serverMutations.comments.create(), queryClient);
 const setStatus = useMutation(serverMutations.threads.setStatus(), queryClient);
@@ -23,35 +23,33 @@ const thread = computed(() => {
   return threads.value.find((t) => t.id === id) ?? null;
 });
 
+const primaryComponent = computed(() => thread.value?.components[0] ?? null);
+
 const githubUrl = computed(() => {
   if (!thread.value || !options.value) return null;
-  return buildGithubUrl(
-    options.value.githubRepo,
-    thread.value.commit_hash,
-    thread.value.component_path,
-    thread.value.component_line,
-  );
+  const c = primaryComponent.value;
+  if (!c) return null;
+  return buildGithubUrl(options.value.githubRepo, thread.value.commit_hash, c.path, c.line);
 });
 
 const viewportWarn = computed(() => {
-  if (!thread.value) return false;
-  if (thread.value.component_path == null) return false;
+  if (!thread.value || !primaryComponent.value) return false;
   const ratio = window.innerWidth / thread.value.viewport_w;
   return ratio < 0.7 || ratio > 1.4;
 });
 
 const componentLabel = computed(() => {
-  if (!thread.value?.component_path) return "page-wide";
-  const name = thread.value.component_name ?? "Anonymous";
-  return `${name} · ${thread.value.component_path}:${thread.value.component_line}`;
+  const c = primaryComponent.value;
+  if (!c) return "page-wide";
+  return `${c.name} · ${c.path}:${c.line}`;
 });
 
 const additionalLinks = computed(() => {
   const t = thread.value;
-  if (!t || !t.additional_components || t.additional_components.length === 0) return [];
+  if (!t || t.components.length <= 1) return [];
   const repo = options.value?.githubRepo ?? null;
-  return t.additional_components.map((c) => ({
-    key: `${c.path}:${c.line}#${c.index}`,
+  return t.components.slice(1).map((c) => ({
+    key: componentKey(c),
     label: `${c.name} · ${c.path}:${c.line}`,
     url: buildGithubUrl(repo, t.commit_hash, c.path, c.line),
   }));
@@ -65,7 +63,7 @@ function onReply(body: string): void {
 function toggleResolved(): void {
   if (!thread.value) return;
   const next = thread.value.status === "open" ? "resolved" : "open";
-  setStatus.mutate({ id: thread.value.id, status: next });
+  setStatus.mutate({ threadId: thread.value.id, status: next });
 }
 </script>
 

@@ -21,7 +21,7 @@ const staleThreads = computed(() =>
       :key="t.id"
       type="button"
       class="sn-pin sn-pin-stale"
-      :title="`stale: ${t.component_path}:${t.component_line}`"
+      :title="`stale: ${t.components[0]?.path}:${t.components[0]?.line}`"
       @click="openThread(t.id)"
     >
       ?

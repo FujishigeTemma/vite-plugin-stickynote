@@ -14,7 +14,7 @@ const props = defineProps<{ thread: Thread }>();
 const updatePosition = useMutation(serverMutations.threads.updatePosition(), queryClient);
 const { data: comments } = useQuery(
   {
-    ...serverQueries.comments.list(props.thread.id),
+    ...serverQueries.threads.comments.list(props.thread.id),
     enabled: () => openThreadId.value === props.thread.id,
   },
   queryClient,
@@ -27,9 +27,7 @@ const DRAG_THRESHOLD = 4;
 let dragStart: { x: number; y: number } | null = null;
 let anchorRectAtStart: DOMRect | null = null;
 
-const canDrag = computed(
-  () => props.thread.component_path != null && props.thread.component_line != null,
-);
+const canDrag = computed(() => props.thread.components.length > 0);
 
 const anchor = computed<Element | null>(() => {
   void tick.value; // re-evaluate as DOM changes
@@ -97,7 +95,7 @@ function onPointerUp(e: PointerEvent): void {
   if (r && pos && r.width > 0 && r.height > 0) {
     const xr = clamp((pos.x - r.left) / r.width);
     const yr = clamp((pos.y - r.top) / r.height);
-    updatePosition.mutate({ id: props.thread.id, x_ratio: xr, y_ratio: yr });
+    updatePosition.mutate({ threadId: props.thread.id, x_ratio: xr, y_ratio: yr });
   }
   resetDrag();
 }

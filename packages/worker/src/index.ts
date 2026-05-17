@@ -1,15 +1,13 @@
 import { Hono } from "hono";
 import { requireAuth } from "./auth.ts";
 import { corsMiddleware } from "./cors.ts";
-import { commentsRoutes } from "./routes/comments.ts";
 import { threadsRoutes } from "./routes/threads.ts";
 import type { Env, Variables } from "./types.ts";
 
 const api = new Hono<{ Bindings: Env; Variables: Variables }>()
   .use("*", requireAuth())
   .get("/me", (c) => c.json(c.get("user")))
-  .route("/threads", threadsRoutes)
-  .route("/comments", commentsRoutes);
+  .route("/threads", threadsRoutes);
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>()
   .use("*", corsMiddleware())

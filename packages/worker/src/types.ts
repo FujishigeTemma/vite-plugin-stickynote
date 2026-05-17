@@ -27,17 +27,12 @@ export type ThreadRow = {
   id: string;
   route: string;
   url: string;
-  component_path: string | null;
-  component_line: number | null;
-  component_index: number;
-  component_name: string | null;
   commit_hash: string;
   dirty_build: number;
   x_ratio: number;
   y_ratio: number;
   viewport_w: number;
   viewport_h: number;
-  additional_components: string | null;
   status: "open" | "resolved";
   created_by: string;
   created_by_name: string;
@@ -47,6 +42,19 @@ export type ThreadRow = {
   // live thread always has at least one comment.
   first_comment_body: string;
 };
+
+export type ComponentRow = {
+  id: string;
+  thread_id: string;
+  display_order: number;
+  path: string;
+  line: number;
+  v_for_index: number;
+  name: string;
+};
+
+// Wire shape exposed by routes; thread_id is implicit from the parent thread.
+export type Component = Omit<ComponentRow, "thread_id">;
 
 export type CommentRow = {
   id: string;

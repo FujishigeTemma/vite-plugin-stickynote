@@ -3,7 +3,19 @@
 // with cleanHtml:false so every component root carries the attribute on the
 // rendered DOM — no Vue private API access needed.
 
-import type { Thread } from "./types.ts";
+import type { Component, Thread } from "./types.ts";
+
+// Identity for a component occurrence in the DOM: same template site +
+// same v-for iteration. Used as map/list/Vue keys and for equality checks.
+type ComponentKeyParts = Pick<Component, "path" | "line" | "v_for_index">;
+
+export function componentKey(c: ComponentKeyParts): string {
+  return `${c.path}:${c.line}#${c.v_for_index}`;
+}
+
+export function sameComponent(a: ComponentKeyParts, b: ComponentKeyParts): boolean {
+  return componentKey(a) === componentKey(b);
+}
 
 const ATTR = "data-v-inspector";
 const SELECTOR = `[${ATTR}]`;
@@ -86,17 +98,13 @@ export function findElementInMap(
 }
 
 export function findThreadAnchor(thread: Thread, elementMap: ElementMap): Element | null {
-  if (thread.component_path == null || thread.component_line == null) return null;
-  return findElementInMap(
-    elementMap,
-    thread.component_path,
-    thread.component_line,
-    thread.component_index,
-  );
+  const primary = thread.components[0];
+  if (!primary) return null;
+  return findElementInMap(elementMap, primary.path, primary.line, primary.v_for_index);
 }
 
 export function isThreadStale(thread: Thread, elementMap: ElementMap): boolean {
-  if (thread.component_path == null || thread.component_line == null) return false;
+  if (thread.components.length === 0) return false;
   return findThreadAnchor(thread, elementMap) == null;
 }
 
