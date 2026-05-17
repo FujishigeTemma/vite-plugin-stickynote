@@ -12,6 +12,15 @@ import type { CommentRow, Env, ThreadRow, Variables } from "../types.ts";
 
 type AdditionalComponent = { path: string; line: number; index: number };
 
+// Inlines the head comment body so the list panel doesn't need a per-thread
+// follow-up fetch. The subquery is index-served by comments(thread_id, created_at).
+const THREAD_SELECT = `SELECT t.*, (
+  SELECT body FROM comments
+  WHERE thread_id = t.id
+  ORDER BY created_at ASC
+  LIMIT 1
+) AS first_comment_body FROM threads t`;
+
 // Hydrate the JSON-serialized additional_components column into a real array
 // for the client. Returning the raw string would leak storage details into
 // the hono RPC type and force every caller to JSON.parse.
@@ -38,13 +47,13 @@ export const threadsRoutes = new Hono<{
     const where: string[] = [];
     const binds: unknown[] = [];
     if (route) {
-      where.push("route = ?");
+      where.push("t.route = ?");
       binds.push(route);
     }
     if (includeResolved !== "true") {
-      where.push("status = 'open'");
+      where.push("t.status = 'open'");
     }
-    const sql = `SELECT * FROM threads ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY created_at DESC`;
+    const sql = `${THREAD_SELECT} ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY t.created_at DESC`;
     const { results } = await c.env.DB.prepare(sql)
       .bind(...binds)
       .all<ThreadRow>();
@@ -96,7 +105,7 @@ export const threadsRoutes = new Hono<{
     ]);
 
     const [thread, comments] = await Promise.all([
-      c.env.DB.prepare("SELECT * FROM threads WHERE id = ?").bind(threadId).first<ThreadRow>(),
+      c.env.DB.prepare(`${THREAD_SELECT} WHERE t.id = ?`).bind(threadId).first<ThreadRow>(),
       c.env.DB.prepare("SELECT * FROM comments WHERE thread_id = ? ORDER BY created_at ASC")
         .bind(threadId)
         .all<CommentRow>(),
@@ -119,7 +128,7 @@ export const threadsRoutes = new Hono<{
         .bind(status, nowISO(), id)
         .run();
       if (!result.meta.changes) return c.json({ error: "not_found" }, 404);
-      const thread = await c.env.DB.prepare("SELECT * FROM threads WHERE id = ?")
+      const thread = await c.env.DB.prepare(`${THREAD_SELECT} WHERE t.id = ?`)
         .bind(id)
         .first<ThreadRow>();
       return c.json({ thread: thread ? hydrateThread(thread) : null });
@@ -138,7 +147,7 @@ export const threadsRoutes = new Hono<{
         .bind(x_ratio, y_ratio, nowISO(), id)
         .run();
       if (!result.meta.changes) return c.json({ error: "not_found" }, 404);
-      const thread = await c.env.DB.prepare("SELECT * FROM threads WHERE id = ?")
+      const thread = await c.env.DB.prepare(`${THREAD_SELECT} WHERE t.id = ?`)
         .bind(id)
         .first<ThreadRow>();
       return c.json({ thread: thread ? hydrateThread(thread) : null });

@@ -26,13 +26,15 @@ const staleIds = computed<Set<string>>(() => {
 });
 
 function summary(t: Thread): string {
+  // Prefer the live in-memory copy when it exists so edits to the head comment
+  // reflect immediately; fall back to the body snapshotted by the list API.
   const list = store.commentsByThread[t.id];
   if (list && list.length > 0) {
     const head = list[0];
     if (head?.deleted_at) return "[deleted]";
     return head?.body ?? "(no body)";
   }
-  return `${t.created_by_name}'s thread`;
+  return t.first_comment_body;
 }
 
 function compLabel(t: Thread): string {
