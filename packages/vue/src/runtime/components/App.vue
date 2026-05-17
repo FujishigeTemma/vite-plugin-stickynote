@@ -159,8 +159,14 @@ prevents collision with host-page CSS. -->
   cursor: grabbing;
   transform: scale(1.1);
 }
-.sn-pin:hover {
+.sn-pin:hover,
+.sn-pin.sn-pin-open {
   transform: scale(1.1);
+}
+.sn-pin.sn-pin-open {
+  box-shadow:
+    0 0 0 2px #1f2937,
+    0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .sn-badge {
