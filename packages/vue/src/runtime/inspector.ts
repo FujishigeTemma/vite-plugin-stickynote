@@ -104,11 +104,6 @@ export function clamp(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
-export function componentName(path: string): string {
-  const base = path.split("/").pop() ?? path;
-  return base.replace(/\.[^.]+$/, "");
-}
-
 export function buildGithubUrl(
   repo: string | null,
   commitHash: string,

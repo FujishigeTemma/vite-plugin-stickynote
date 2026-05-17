@@ -15,7 +15,6 @@ import {
 import {
   buildGithubUrl,
   clamp,
-  componentName,
   findElementInMap,
   findOccurrenceIndex,
   parseInspector,
@@ -40,6 +39,7 @@ type SelectedComponent = {
   component_path: string;
   component_line: number;
   component_index: number;
+  component_name: string;
 };
 
 const composer = reactive<{
@@ -141,7 +141,7 @@ function renderHighlight(): void {
     showHighlight({
       rect,
       mode: "info",
-      name: info ? componentName(info.path) : name,
+      name,
       source: info ? `${info.path}:${info.line}` : null,
     });
   }
@@ -220,6 +220,7 @@ function onClickCapture(e: MouseEvent): void {
     component_path: info.path,
     component_line: info.line,
     component_index: findOccurrenceIndex(targetEl, data),
+    component_name: instanceName(inst),
   };
 
   // Shift+click with composer open: Finder-style multi-select. Toggle the
@@ -272,18 +273,25 @@ function refreshSelectionHighlights(): void {
     ];
   } else {
     const thread = openId ? threads.value.find((t) => t.id === openId) : null;
-    if (thread && thread.component_path != null && thread.component_line != null) {
+    if (
+      thread &&
+      thread.component_path != null &&
+      thread.component_line != null &&
+      thread.component_name != null
+    ) {
       all = [
         {
           component_path: thread.component_path,
           component_line: thread.component_line,
           component_index: thread.component_index,
+          component_name: thread.component_name,
           primary: true,
         },
         ...(thread.additional_components ?? []).map((c) => ({
           component_path: c.path,
           component_line: c.line,
           component_index: c.index,
+          component_name: c.name,
           primary: false,
         })),
       ];
@@ -302,7 +310,7 @@ function refreshSelectionHighlights(): void {
     items.push({
       key: `${c.component_path}:${c.component_line}#${c.component_index}`,
       rect: { left: r.left, top: r.top, width: r.width, height: r.height },
-      label: `${c.primary ? "★ " : ""}${componentName(c.component_path)}`,
+      label: `${c.primary ? "★ " : ""}${c.component_name}`,
     });
   }
   showSelectionHighlights(items);
@@ -334,6 +342,7 @@ function submitComposer(): void {
       component_path: composer.primary.component_path,
       component_line: composer.primary.component_line,
       component_index: composer.primary.component_index,
+      component_name: composer.primary.component_name,
       commit_hash: options.value.commitHash,
       dirty_build: options.value.dirtyBuild,
       x_ratio: clamp(x_ratio),
@@ -344,6 +353,7 @@ function submitComposer(): void {
         path: c.component_path,
         line: c.component_line,
         index: c.component_index,
+        name: c.component_name,
       })),
       body: composer.body,
     },

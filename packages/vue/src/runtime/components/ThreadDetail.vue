@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/vue-query";
 import { computed } from "vue";
 
 import { useThreadsList } from "../composables.ts";
-import { buildGithubUrl, componentName } from "../inspector.ts";
+import { buildGithubUrl } from "../inspector.ts";
 import { serverMutations } from "../mutations.ts";
 import { serverQueries } from "../queries/server.ts";
 import { queryClient } from "../query-client.ts";
@@ -42,7 +42,8 @@ const viewportWarn = computed(() => {
 
 const componentLabel = computed(() => {
   if (!thread.value?.component_path) return "page-wide";
-  return `${componentName(thread.value.component_path)} · ${thread.value.component_path}:${thread.value.component_line}`;
+  const name = thread.value.component_name ?? "Anonymous";
+  return `${name} · ${thread.value.component_path}:${thread.value.component_line}`;
 });
 
 const additionalLinks = computed(() => {
@@ -51,7 +52,7 @@ const additionalLinks = computed(() => {
   const repo = options.value?.githubRepo ?? null;
   return t.additional_components.map((c) => ({
     key: `${c.path}:${c.line}#${c.index}`,
-    label: `${componentName(c.path)} · ${c.path}:${c.line}`,
+    label: `${c.name} · ${c.path}:${c.line}`,
     url: buildGithubUrl(repo, t.commit_hash, c.path, c.line),
   }));
 });

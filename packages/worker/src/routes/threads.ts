@@ -10,7 +10,7 @@ import {
 } from "../schemas.ts";
 import type { CommentRow, Env, ThreadRow, Variables } from "../types.ts";
 
-type AdditionalComponent = { path: string; line: number; index: number };
+type AdditionalComponent = { path: string; line: number; index: number; name: string };
 
 // Inlines the head comment body so the list panel doesn't need a per-thread
 // follow-up fetch. The subquery is index-served by comments(thread_id, created_at).
@@ -74,11 +74,11 @@ export const threadsRoutes = new Hono<{
     await c.env.DB.batch([
       c.env.DB.prepare(
         `INSERT INTO threads (
-          id, route, url, component_path, component_line, component_index,
+          id, route, url, component_path, component_line, component_index, component_name,
           commit_hash, dirty_build, x_ratio, y_ratio, viewport_w, viewport_h,
           additional_components,
           status, created_by, created_by_name, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`,
       ).bind(
         threadId,
         body.route,
@@ -86,6 +86,7 @@ export const threadsRoutes = new Hono<{
         body.component_path,
         body.component_line,
         body.component_index,
+        body.component_name,
         body.commit_hash,
         body.dirty_build ? 1 : 0,
         body.x_ratio,

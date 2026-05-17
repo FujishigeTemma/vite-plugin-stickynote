@@ -30,6 +30,7 @@ export type ThreadRow = {
   component_path: string | null;
   component_line: number | null;
   component_index: number;
+  component_name: string | null;
   commit_hash: string;
   dirty_build: number;
   x_ratio: number;

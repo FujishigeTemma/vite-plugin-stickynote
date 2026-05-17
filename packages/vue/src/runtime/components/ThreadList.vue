@@ -3,7 +3,7 @@ import { useMutation } from "@tanstack/vue-query";
 import { computed, ref } from "vue";
 
 import { useThreadsList } from "../composables.ts";
-import { componentName, isThreadStale } from "../inspector.ts";
+import { isThreadStale } from "../inspector.ts";
 import { serverMutations } from "../mutations.ts";
 import { queryClient } from "../query-client.ts";
 import { elementMap, openThread, openThreadId, options } from "../state.ts";
@@ -26,7 +26,7 @@ function isStale(t: Thread): boolean {
 
 function compLabel(t: Thread): string {
   if (!t.component_path) return "page-wide";
-  return componentName(t.component_path);
+  return t.component_name ?? "Anonymous";
 }
 
 async function createPageWide(body: string): Promise<void> {
@@ -35,6 +35,7 @@ async function createPageWide(body: string): Promise<void> {
     component_path: null,
     component_line: null,
     component_index: 0,
+    component_name: null,
     commit_hash: options.value.commitHash,
     dirty_build: options.value.dirtyBuild,
     x_ratio: 0,

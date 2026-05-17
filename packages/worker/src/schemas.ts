@@ -6,6 +6,7 @@ export const AdditionalComponentSchema = v.object({
   path: v.string(),
   line: v.number(),
   index: v.number(),
+  name: v.string(),
 });
 
 export const CreateThreadSchema = v.object({
@@ -14,6 +15,7 @@ export const CreateThreadSchema = v.object({
   component_path: v.nullable(v.string()),
   component_line: v.nullable(v.number()),
   component_index: v.optional(v.number(), 0),
+  component_name: v.nullable(v.string()),
   commit_hash: v.string(),
   dirty_build: v.boolean(),
   x_ratio: v.number(),
