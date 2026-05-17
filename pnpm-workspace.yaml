@@ -26,4 +26,5 @@ allowBuilds:
   "@clerk/shared": true
   esbuild: true
   sharp: true
+  vue-demi: true
   workerd: true
