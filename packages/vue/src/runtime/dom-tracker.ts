@@ -31,7 +31,21 @@ export function useDomTracker(): void {
 
   useEventListener(windowWhenActive, "scroll", bumpTick, { capture: true, passive: true });
   useEventListener(windowWhenActive, "resize", bumpTick, { passive: true });
-  useMutationObserver(bodyWhenActive, rebuildMap, { childList: true, subtree: true });
+  // Filter out mutations inside the plugin's own overlay — otherwise our
+  // selection-highlight / hover-card updates feed back here, bump tick, which
+  // re-renders the overlay, which mutates the DOM again, ad infinitum.
+  useMutationObserver(
+    bodyWhenActive,
+    (records) => {
+      for (const r of records) {
+        const target = r.target as Element;
+        if (target.nodeType === 1 && target.closest("[data-stickynote-ignore]")) continue;
+        rebuildMap();
+        return;
+      }
+    },
+    { childList: true, subtree: true },
+  );
   useResizeObserver(bodyWhenActive, bumpTick);
 
   // Prime on the off→on edge; observers only fire on subsequent mutations.
