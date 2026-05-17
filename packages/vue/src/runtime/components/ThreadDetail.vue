@@ -67,7 +67,7 @@ function back(): void {
 </script>
 
 <template>
-  <template v-if="thread">
+  <div v-if="thread" class="sn-thread-detail">
     <button class="sn-detail-back" type="button" @click="back">← back to threads</button>
     <div class="sn-detail-meta">
       <span>{{ componentLabel }}</span>
@@ -90,10 +90,15 @@ function back(): void {
         {{ thread.status === "open" ? "Resolve" : "Reopen" }}
       </button>
     </div>
-  </template>
+  </div>
 </template>
 
 <style scoped>
+.sn-thread-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 .sn-detail-back {
   background: transparent;
   border: none;

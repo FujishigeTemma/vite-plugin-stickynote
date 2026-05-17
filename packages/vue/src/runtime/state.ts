@@ -20,6 +20,8 @@ export type StickynoteStore = {
   threadsForCurrentRoute: ComputedRef<Thread[]>;
   visibleThreads: ComputedRef<Thread[]>;
   toggleActive: () => void;
+  closePanel: () => void;
+  togglePanel: () => void;
   refreshThreads: () => Promise<void>;
   loadComments: (threadId: string) => Promise<void>;
   openThread: (id: string | null) => Promise<void>;
@@ -154,13 +156,26 @@ export function createStore(options: OverlayOptions, api: ApiClient): Stickynote
     }
   }
 
+  // Panel-open and thread-selection are one invariant: closing the panel
+  // always discards the currently-open thread. Going through this helper
+  // keeps that fact in one place — callers never poke `panelOpen` directly.
+  function closePanel(): void {
+    panelOpen.value = false;
+    openThreadId.value = null;
+  }
+
+  function togglePanel(): void {
+    if (panelOpen.value) closePanel();
+    else panelOpen.value = true;
+  }
+
   function toggleActive(): void {
     active.value = !active.value;
     if (active.value) {
       void loadMe();
       void refreshThreads();
     } else {
-      openThreadId.value = null;
+      closePanel();
     }
   }
 
@@ -178,6 +193,8 @@ export function createStore(options: OverlayOptions, api: ApiClient): Stickynote
     threadsForCurrentRoute,
     visibleThreads,
     toggleActive,
+    closePanel,
+    togglePanel,
     refreshThreads,
     loadComments,
     openThread,

@@ -6,10 +6,6 @@ const store = useStore();
 
 const dirtyBadge = computed(() => (store.options.dirtyBuild ? "local changes" : null));
 const shortCommit = computed(() => store.options.commitHash.slice(0, 7));
-
-function togglePanel(): void {
-  store.panelOpen.value = !store.panelOpen.value;
-}
 </script>
 
 <template>
@@ -20,7 +16,7 @@ function togglePanel(): void {
       type="button"
       :class="{ 'sn-active': store.panelOpen.value }"
       title="Toggle panel"
-      @click="togglePanel"
+      @click="store.togglePanel"
     >
       threads
     </button>

@@ -5,10 +5,6 @@ import ThreadList from "./ThreadList.vue";
 
 const store = useStore();
 
-function close(): void {
-  store.panelOpen.value = false;
-}
-
 function toggleResolved(): void {
   store.showResolved.value = !store.showResolved.value;
   void store.refreshThreads();
@@ -28,7 +24,7 @@ function toggleResolved(): void {
         >
           show resolved
         </button>
-        <button type="button" @click="close">close</button>
+        <button type="button" @click="store.closePanel">close</button>
       </div>
     </header>
     <div class="sn-panel-body">
