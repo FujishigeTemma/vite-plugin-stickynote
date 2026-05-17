@@ -101,6 +101,7 @@ function back(): void {
   font: inherit;
   cursor: pointer;
   padding: 0;
+  text-align: left;
 }
 .sn-detail-back:hover {
   color: #111827;

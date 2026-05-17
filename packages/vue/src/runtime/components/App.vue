@@ -157,11 +157,11 @@ prevents collision with host-page CSS. -->
 }
 .sn-pin.sn-pin-dragging {
   cursor: grabbing;
-  transform: scale(1.1);
+  transform: scale(1.2);
 }
 .sn-pin:hover,
 .sn-pin.sn-pin-open {
-  transform: scale(1.1);
+  transform: scale(1.2);
 }
 .sn-pin.sn-pin-open {
   box-shadow:
