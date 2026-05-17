@@ -3,8 +3,8 @@ import { computed, inject, ref } from "vue";
 import { ELEMENT_MAP_KEY } from "../cache.ts";
 import { componentName, isThreadStale } from "../inspector.ts";
 import { useStore } from "../store-inject.ts";
-import CommentForm from "./CommentForm.vue";
 import type { Thread } from "../types.ts";
+import CommentForm from "./CommentForm.vue";
 
 const store = useStore();
 const elementMap = inject(ELEMENT_MAP_KEY);
@@ -65,7 +65,7 @@ async function createPageWide(body: string): Promise<void> {
 
 <template>
   <div>
-    <h3 class="sn-section-title">Page-wide</h3>
+    <h3 class="sn-section-title">For This Page</h3>
     <div v-if="grouped.pageWide.length === 0 && !showPageWideForm" class="sn-empty">
       no page-wide threads on this route
     </div>
@@ -92,10 +92,10 @@ async function createPageWide(body: string): Promise<void> {
       />
     </div>
     <div v-else class="sn-form-actions">
-      <button type="button" @click="showPageWideForm = true">+ page-wide comment</button>
+      <button type="button" @click="showPageWideForm = true">+ comment</button>
     </div>
 
-    <h3 class="sn-section-title">Pinned to components</h3>
+    <h3 class="sn-section-title">Per Component(s)</h3>
     <div v-if="grouped.component.length === 0" class="sn-empty">
       no component pins on this route
     </div>
