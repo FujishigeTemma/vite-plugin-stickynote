@@ -276,20 +276,44 @@ function findAnchorElement(start: Element | null, data: string): Element | null 
 }
 
 function refreshSelectionHighlights(): void {
-  if (!composer.visible || !composer.primary) {
+  const map = elementMap?.value;
+  const composerActive = composer.visible && composer.primary;
+  const openId = store.openThreadId.value;
+  if (!map || (!composerActive && !openId)) {
     clearSelectionHighlights();
     return;
   }
-  const map = elementMap?.value;
-  if (!map) {
+  // Composer takes priority over an open thread when both are present.
+  let all: Array<SelectedComponent & { primary: boolean }> | null = null;
+  if (composerActive && composer.primary) {
+    all = [
+      { ...composer.primary, primary: true },
+      ...composer.additional.map((c) => ({ ...c, primary: false })),
+    ];
+  } else {
+    const thread = openId ? store.threads.value.find((t) => t.id === openId) : null;
+    if (thread && thread.component_path != null && thread.component_line != null) {
+      all = [
+        {
+          component_path: thread.component_path,
+          component_line: thread.component_line,
+          component_index: thread.component_index,
+          primary: true,
+        },
+        ...(thread.additional_components ?? []).map((c) => ({
+          component_path: c.path,
+          component_line: c.line,
+          component_index: c.index,
+          primary: false,
+        })),
+      ];
+    }
+  }
+  if (!all) {
     clearSelectionHighlights();
     return;
   }
   const items: SelectionRect[] = [];
-  const all: Array<SelectedComponent & { primary: boolean }> = [
-    { ...composer.primary, primary: true },
-    ...composer.additional.map((c) => ({ ...c, primary: false })),
-  ];
   for (const c of all) {
     const el = findElementInMap(map, c.component_path, c.component_line, c.component_index);
     if (!el) continue;
@@ -316,7 +340,7 @@ function closeComposer(): void {
   composer.rect = null;
   composer.body = "";
   composer.saving = false;
-  clearSelectionHighlights();
+  refreshSelectionHighlights();
 }
 
 async function submitComposer(): Promise<void> {
@@ -368,6 +392,11 @@ watch(
     renderHighlight();
     refreshSelectionHighlights();
   },
+);
+
+watch(
+  () => store.openThreadId.value,
+  () => refreshSelectionHighlights(),
 );
 
 onMounted(() => {
