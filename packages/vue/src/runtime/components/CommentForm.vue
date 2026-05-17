@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, useTemplateRef, watch } from "vue";
+import { ref, useTemplateRef } from "vue";
 
 const props = defineProps<{
   initialBody?: string;
@@ -14,13 +14,6 @@ const emit = defineEmits<{
 const body = ref(props.initialBody ?? "");
 const saving = ref(false);
 const formRef = useTemplateRef<HTMLFormElement>("formRef");
-
-watch(
-  () => props.initialBody,
-  (next) => {
-    body.value = next ?? "";
-  },
-);
 
 async function submit(): Promise<void> {
   const text = body.value.trim();
