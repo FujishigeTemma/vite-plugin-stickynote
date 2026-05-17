@@ -12,19 +12,13 @@ const emit = defineEmits<{
 }>();
 
 const body = ref(props.initialBody ?? "");
-const saving = ref(false);
 const formRef = useTemplateRef<HTMLFormElement>("formRef");
 
-async function submit(): Promise<void> {
+function submit(): void {
   const text = body.value.trim();
   if (!text) return;
-  saving.value = true;
-  try {
-    emit("submit", text);
-    body.value = "";
-  } finally {
-    saving.value = false;
-  }
+  emit("submit", text);
+  body.value = "";
 }
 
 function onKeydown(e: KeyboardEvent): void {
@@ -40,7 +34,7 @@ function onKeydown(e: KeyboardEvent): void {
     <textarea v-model="body" placeholder="Write a comment…" @keydown="onKeydown" />
     <div class="sn-form-actions">
       <button v-if="props.cancelable" type="button" @click="emit('cancel')">cancel</button>
-      <button type="submit" class="sn-primary" :disabled="saving || !body.trim()">
+      <button type="submit" class="sn-primary" :disabled="!body.trim()">
         {{ props.submitLabel ?? "Reply" }}
       </button>
     </div>
