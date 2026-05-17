@@ -19,11 +19,10 @@ const grouped = computed(() => {
   };
 });
 
-const staleIds = computed<Set<string>>(() => {
+function isStale(t: Thread): boolean {
   const map = elementMap?.value;
-  if (!map) return new Set();
-  return new Set(grouped.value.component.filter((t) => isThreadStale(t, map)).map((t) => t.id));
-});
+  return map ? isThreadStale(t, map) : false;
+}
 
 function summary(t: Thread): string {
   // Prefer the live in-memory copy when it exists so edits to the head comment
@@ -69,53 +68,57 @@ async function createPageWide(body: string): Promise<void> {
     <div v-if="grouped.pageWide.length === 0 && !showPageWideForm" class="sn-empty">
       no page-wide threads on this route
     </div>
-    <div
-      v-for="t in grouped.pageWide"
-      :key="t.id"
-      class="sn-thread-card"
-      :class="{ 'sn-active-thread': store.openThreadId.value === t.id }"
-      @click="open(t)"
-    >
-      <div class="sn-thread-meta">
-        <span class="sn-comp">{{ compLabel(t) }}</span>
-        <span>· {{ t.created_by_name }}</span>
-        <span v-if="t.status === 'resolved'">· resolved</span>
+    <div class="sn-thread-list">
+      <div
+        v-for="t in grouped.pageWide"
+        :key="t.id"
+        class="sn-thread-card"
+        :class="{ 'sn-active-thread': store.openThreadId.value === t.id }"
+        @click="open(t)"
+      >
+        <div class="sn-thread-meta">
+          <span class="sn-comp">{{ compLabel(t) }}</span>
+          <span>· {{ t.created_by_name }}</span>
+          <span v-if="t.status === 'resolved'">· resolved</span>
+        </div>
+        <div class="sn-thread-body">{{ summary(t) }}</div>
       </div>
-      <div class="sn-thread-body">{{ summary(t) }}</div>
-    </div>
-    <div v-if="showPageWideForm" class="sn-thread-card">
-      <CommentForm
-        submit-label="Post"
-        cancelable
-        @submit="createPageWide"
-        @cancel="showPageWideForm = false"
-      />
-    </div>
-    <div v-else class="sn-form-actions">
-      <button type="button" @click="showPageWideForm = true">+ comment</button>
+      <div v-if="showPageWideForm" class="sn-thread-card">
+        <CommentForm
+          submit-label="Post"
+          cancelable
+          @submit="createPageWide"
+          @cancel="showPageWideForm = false"
+        />
+      </div>
+      <div v-else class="sn-form-actions">
+        <button type="button" @click="showPageWideForm = true">+ comment</button>
+      </div>
     </div>
 
     <h3 class="sn-section-title">Per Component(s)</h3>
     <div v-if="grouped.component.length === 0" class="sn-empty">
       no component pins on this route
     </div>
-    <div
-      v-for="t in grouped.component"
-      :key="t.id"
-      class="sn-thread-card"
-      :class="{
-        'sn-active-thread': store.openThreadId.value === t.id,
-        'sn-thread-stale': staleIds.has(t.id),
-      }"
-      @click="open(t)"
-    >
-      <div class="sn-thread-meta">
-        <span class="sn-comp">{{ compLabel(t) }}</span>
-        <span>· {{ t.created_by_name }}</span>
-        <span v-if="t.status === 'resolved'">· resolved</span>
-        <span v-if="staleIds.has(t.id)" class="sn-badge">stale</span>
+    <div class="sn-thread-list">
+      <div
+        v-for="t in grouped.component"
+        :key="t.id"
+        class="sn-thread-card"
+        :class="{
+          'sn-active-thread': store.openThreadId.value === t.id,
+          'sn-thread-stale': isStale(t),
+        }"
+        @click="open(t)"
+      >
+        <div class="sn-thread-meta">
+          <span class="sn-comp">{{ compLabel(t) }}</span>
+          <span>· {{ t.created_by_name }}</span>
+          <span v-if="t.status === 'resolved'">· resolved</span>
+          <span v-if="isStale(t)" class="sn-badge">stale</span>
+        </div>
+        <div class="sn-thread-body">{{ summary(t) }}</div>
       </div>
-      <div class="sn-thread-body">{{ summary(t) }}</div>
     </div>
   </div>
 </template>
@@ -132,6 +135,11 @@ async function createPageWide(body: string): Promise<void> {
   color: #9ca3af;
   font-style: italic;
   padding: 8px 0;
+}
+.sn-thread-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 .sn-thread-card {
   border: 1px solid #e5e7eb;
