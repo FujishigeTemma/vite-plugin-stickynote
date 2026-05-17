@@ -9,7 +9,7 @@ export default defineConfig({
     vue(),
     stickynote({
       apiUrl: "http://localhost:8787",
-      githubRepo: "FUJISHIGE-temma/vite-plugin-stickynote",
+      githubRepo: "FujishigeTemma/vite-plugin-stickynote",
       // Local-dev only. Matches DEV_BEARER in packages/worker/.dev.vars.
       devBearer: "stickynote-dev-token",
     }),
