@@ -100,6 +100,10 @@ export function isThreadStale(thread: Thread, elementMap: ElementMap): boolean {
   return findThreadAnchor(thread, elementMap) == null;
 }
 
+export function clamp(n: number): number {
+  return Math.max(0, Math.min(1, n));
+}
+
 export function componentName(path: string): string {
   const base = path.split("/").pop() ?? path;
   return base.replace(/\.[^.]+$/, "");

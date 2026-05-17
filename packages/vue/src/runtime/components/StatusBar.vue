@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useStore } from "../store-inject.ts";
 
-const store = useStore();
+import { options, panelOpen, togglePanel } from "../state.ts";
 
-const dirtyBadge = computed(() => (store.options.dirtyBuild ? "local changes" : null));
-const shortCommit = computed(() => store.options.commitHash.slice(0, 7));
+const dirtyBadge = computed(() => (options.value?.dirtyBuild ? "local changes" : null));
+const shortCommit = computed(() => options.value?.commitHash.slice(0, 7) ?? "");
 </script>
 
 <template>
@@ -14,9 +13,9 @@ const shortCommit = computed(() => store.options.commitHash.slice(0, 7));
     <span class="sn-commit">{{ shortCommit }}</span>
     <button
       type="button"
-      :class="{ 'sn-active': store.panelOpen.value }"
+      :class="{ 'sn-active': panelOpen }"
       title="Toggle panel"
-      @click="store.togglePanel"
+      @click="togglePanel"
     >
       threads
     </button>

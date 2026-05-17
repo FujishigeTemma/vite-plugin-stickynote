@@ -1,27 +1,32 @@
 <script setup lang="ts">
+import { useMutation, useQuery } from "@tanstack/vue-query";
 import { computed, ref } from "vue";
-import { useStore } from "../store-inject.ts";
+
+import { serverMutations } from "../mutations.ts";
+import { serverQueries } from "../queries/server.ts";
+import { queryClient } from "../query-client.ts";
 import type { Comment } from "../types.ts";
 import CommentForm from "./CommentForm.vue";
 
 const props = defineProps<{ comment: Comment }>();
-const store = useStore();
+
+const { data: me } = useQuery(serverQueries.me(), queryClient);
+const editComment = useMutation(serverMutations.comments.edit(), queryClient);
+const deleteComment = useMutation(serverMutations.comments.delete(), queryClient);
 
 const editing = ref(false);
 
-// Only the comment's author can edit/delete. The current user comes from
-// the worker's /api/me, which echoes the verified JWT sub regardless of
-// auth path (Clerk JWT or dev-bearer fallback).
-const ownedByCurrent = computed(() => store.me.value?.sub === props.comment.created_by);
+// `me.sub` is the JWT-verified subject — same identity regardless of auth
+// path (Clerk JWT or dev-bearer fallback).
+const ownedByCurrent = computed(() => me.value?.sub === props.comment.created_by);
 
-async function onEdit(body: string): Promise<void> {
-  await store.editComment(props.comment.id, body);
-  editing.value = false;
+function onEdit(body: string): void {
+  editComment.mutate({ id: props.comment.id, body }, { onSuccess: () => (editing.value = false) });
 }
 
-async function onDelete(): Promise<void> {
+function onDelete(): void {
   if (!confirm("Delete this comment?")) return;
-  await store.deleteComment(props.comment.id);
+  deleteComment.mutate({ id: props.comment.id, threadId: props.comment.thread_id });
 }
 </script>
 

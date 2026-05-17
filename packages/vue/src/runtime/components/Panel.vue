@@ -1,34 +1,31 @@
 <script setup lang="ts">
-import { useStore } from "../store-inject.ts";
+import { closePanel, openThreadId, panelOpen, showResolved } from "../state.ts";
 import ThreadDetail from "./ThreadDetail.vue";
 import ThreadList from "./ThreadList.vue";
 
-const store = useStore();
-
-function toggleResolved(): void {
-  store.showResolved.value = !store.showResolved.value;
-  void store.refreshThreads();
+function toggleShowResolved(): void {
+  showResolved.value = !showResolved.value;
 }
 </script>
 
 <template>
-  <aside v-if="store.panelOpen.value" class="sn-panel">
+  <aside v-if="panelOpen" class="sn-panel">
     <header class="sn-panel-header">
-      <h2>{{ store.openThreadId.value ? "Thread" : "Threads" }}</h2>
+      <h2>{{ openThreadId ? "Thread" : "Threads" }}</h2>
       <div class="sn-panel-actions">
         <button
-          v-if="!store.openThreadId.value"
+          v-if="!openThreadId"
           type="button"
-          :class="{ 'sn-active': store.showResolved.value }"
-          @click="toggleResolved"
+          :class="{ 'sn-active': showResolved }"
+          @click="toggleShowResolved"
         >
           show resolved
         </button>
-        <button type="button" @click="store.closePanel">close</button>
+        <button type="button" @click="closePanel">close</button>
       </div>
     </header>
     <div class="sn-panel-body">
-      <ThreadDetail v-if="store.openThreadId.value" />
+      <ThreadDetail v-if="openThreadId" />
       <ThreadList v-else />
     </div>
   </aside>

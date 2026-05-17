@@ -1,18 +1,24 @@
 <script setup lang="ts">
-import { computed, inject, ref, watch } from "vue";
-import { ELEMENT_MAP_KEY, TICK_KEY } from "../cache.ts";
-import { findThreadAnchor } from "../inspector.ts";
-import { useStore } from "../store-inject.ts";
+import { useMutation, useQuery } from "@tanstack/vue-query";
+import { computed, ref } from "vue";
+
+import { clamp, findThreadAnchor } from "../inspector.ts";
+import { serverMutations } from "../mutations.ts";
+import { serverQueries } from "../queries/server.ts";
+import { queryClient } from "../query-client.ts";
+import { elementMap, openThread, openThreadId, tick } from "../state.ts";
 import type { Thread } from "../types.ts";
 
 const props = defineProps<{ thread: Thread }>();
-const store = useStore();
 
-const tick = inject(TICK_KEY);
-const elementMap = inject(ELEMENT_MAP_KEY);
-
-const position = ref<{ x: number; y: number } | null>(null);
-const stale = ref(false);
+const updatePosition = useMutation(serverMutations.threads.updatePosition(), queryClient);
+const { data: comments } = useQuery(
+  {
+    ...serverQueries.comments.list(props.thread.id),
+    enabled: () => openThreadId.value === props.thread.id,
+  },
+  queryClient,
+);
 
 const dragPos = ref<{ x: number; y: number } | null>(null);
 const dragging = computed(() => dragPos.value !== null);
@@ -25,54 +31,27 @@ const canDrag = computed(
   () => props.thread.component_path != null && props.thread.component_line != null,
 );
 
-function findAnchor(): Element | null {
-  const map = elementMap?.value;
-  if (!map) return null;
-  return findThreadAnchor(props.thread, map);
-}
+const anchor = computed<Element | null>(() => {
+  void tick.value; // re-evaluate as DOM changes
+  if (!canDrag.value) return null;
+  return findThreadAnchor(props.thread, elementMap.value);
+});
 
-function compute(): void {
-  if (dragging.value) return;
-  if (!canDrag.value) {
-    position.value = { x: window.innerWidth - 60, y: 80 };
-    stale.value = false;
-    return;
-  }
-  const el = findAnchor();
-  if (!el) {
-    position.value = null;
-    stale.value = true;
-    return;
-  }
-  const r = el.getBoundingClientRect();
-  position.value = {
+const restingPos = computed<{ x: number; y: number } | null>(() => {
+  void tick.value;
+  if (!canDrag.value) return { x: window.innerWidth - 60, y: 80 };
+  if (!anchor.value) return null;
+  const r = anchor.value.getBoundingClientRect();
+  return {
     x: r.left + r.width * props.thread.x_ratio,
     y: r.top + r.height * props.thread.y_ratio,
   };
-  stale.value = false;
-}
-
-watch(
-  () => tick?.value ?? 0,
-  () => compute(),
-  { immediate: true },
-);
-
-const isOpen = computed(() => store.openThreadId.value === props.thread.id);
-const label = computed(() => {
-  const list = store.commentsByThread[props.thread.id];
-  return list ? list.length : 1;
 });
 
-const displayPos = computed(() => dragPos.value ?? position.value);
-
-function open(): void {
-  void store.openThread(props.thread.id);
-}
-
-function clamp01(n: number): number {
-  return Math.max(0, Math.min(1, n));
-}
+const stale = computed(() => canDrag.value && anchor.value == null);
+const isOpen = computed(() => openThreadId.value === props.thread.id);
+const label = computed(() => comments.value?.length ?? 1);
+const displayPos = computed(() => dragPos.value ?? restingPos.value);
 
 function onPointerDown(e: PointerEvent): void {
   if (e.button !== 0) return;
@@ -89,9 +68,8 @@ function onPointerMove(e: PointerEvent): void {
     const dx = e.clientX - dragStart.x;
     const dy = e.clientY - dragStart.y;
     if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
-    const el = findAnchor();
-    if (!el) return;
-    anchorRectAtStart = el.getBoundingClientRect();
+    if (!anchor.value) return;
+    anchorRectAtStart = anchor.value.getBoundingClientRect();
     e.preventDefault();
   }
   dragPos.value = { x: e.clientX, y: e.clientY };
@@ -111,19 +89,17 @@ function onPointerUp(e: PointerEvent): void {
   }
   if (!wasDragging) {
     resetDrag();
-    open();
+    openThread(props.thread.id);
     return;
   }
   const r = anchorRectAtStart;
   const pos = dragPos.value;
   if (r && pos && r.width > 0 && r.height > 0) {
-    const xr = clamp01((pos.x - r.left) / r.width);
-    const yr = clamp01((pos.y - r.top) / r.height);
-    void store.updateThreadPosition(props.thread, xr, yr);
+    const xr = clamp((pos.x - r.left) / r.width);
+    const yr = clamp((pos.y - r.top) / r.height);
+    updatePosition.mutate({ id: props.thread.id, x_ratio: xr, y_ratio: yr });
   }
   resetDrag();
-  // Store splice doesn't fire `tick`, so position would stay stale until the next scroll/resize.
-  compute();
 }
 
 function onPointerCancel(e: PointerEvent): void {
@@ -132,7 +108,6 @@ function onPointerCancel(e: PointerEvent): void {
     target.releasePointerCapture?.(e.pointerId);
   }
   resetDrag();
-  compute();
 }
 </script>
 

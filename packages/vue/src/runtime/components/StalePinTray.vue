@@ -1,19 +1,17 @@
 <script setup lang="ts">
-import { computed, inject } from "vue";
-import { ELEMENT_MAP_KEY } from "../cache.ts";
+import { computed } from "vue";
+
+import { useThreadsList } from "../composables.ts";
 import { isThreadStale } from "../inspector.ts";
-import { useStore } from "../store-inject.ts";
+import { elementMap, openThread } from "../state.ts";
 
-const store = useStore();
-const elementMap = inject(ELEMENT_MAP_KEY);
+const { visible } = useThreadsList();
 
-// When a pinned component disappears (refactor), surface it in a fixed
-// tray so the comment isn't silently lost.
-const staleThreads = computed(() => {
-  const map = elementMap?.value;
-  if (!map) return [];
-  return store.visibleThreads.value.filter((t) => isThreadStale(t, map));
-});
+// Surface pinned components whose anchor has disappeared (refactor / rename)
+// so the comment isn't silently lost.
+const staleThreads = computed(() =>
+  visible.value.filter((t) => isThreadStale(t, elementMap.value)),
+);
 </script>
 
 <template>
@@ -24,7 +22,7 @@ const staleThreads = computed(() => {
       type="button"
       class="sn-pin sn-pin-stale"
       :title="`stale: ${t.component_path}:${t.component_line}`"
-      @click="store.openThread(t.id)"
+      @click="openThread(t.id)"
     >
       ?
     </button>

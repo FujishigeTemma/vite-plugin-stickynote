@@ -1,250 +1,48 @@
-import { computed, reactive, ref, watch, type ComputedRef, type Ref } from "vue";
-import type { ApiClient } from "./api.ts";
+import { ref, shallowRef } from "vue";
+
 import type { OverlayOptions } from "../options.ts";
-import type { Comment, Thread } from "./types.ts";
-import { findInstance } from "./vue-instance.ts";
+import { type ElementMap } from "./inspector.ts";
 
-export type StickynoteStore = {
-  options: OverlayOptions;
-  api: ApiClient;
-  active: Ref<boolean>;
-  panelOpen: Ref<boolean>;
-  showResolved: Ref<boolean>;
-  currentRoute: Ref<string>;
-  threads: Ref<Thread[]>;
-  commentsByThread: Record<string, Comment[]>;
-  openThreadId: Ref<string | null>;
-  // Identify the signed-in user so own-comment edit/delete checks compare
-  // against the verified identity rather than guessing.
-  me: Ref<{ sub: string; name: string } | null>;
-  threadsForCurrentRoute: ComputedRef<Thread[]>;
-  visibleThreads: ComputedRef<Thread[]>;
-  toggleActive: () => void;
-  closePanel: () => void;
-  togglePanel: () => void;
-  refreshThreads: () => Promise<void>;
-  loadComments: (threadId: string) => Promise<void>;
-  openThread: (id: string | null) => Promise<void>;
-  toggleResolved: (thread: Thread) => Promise<void>;
-  updateThreadPosition: (thread: Thread, x_ratio: number, y_ratio: number) => Promise<void>;
-  createThread: (
-    input: Omit<Parameters<ApiClient["createThread"]>[0], "route" | "url">,
-  ) => Promise<Thread>;
-  reply: (threadId: string, body: string) => Promise<void>;
-  editComment: (id: string, body: string) => Promise<void>;
-  deleteComment: (id: string) => Promise<void>;
-};
+// Plain reactive refs for everything that isn't server state. Server state
+// (threads / comments / me) lives in TanStack Query; UI flags, DOM-tracker
+// values, and the static mount options have no fetch / staleness / GC story,
+// so a cache layer would be pure overhead.
 
-export function createStore(options: OverlayOptions, api: ApiClient): StickynoteStore {
-  const active = ref(false);
-  const panelOpen = ref(false);
-  const showResolved = ref(false);
-  const currentRoute = ref(currentPath());
-  const threads = ref<Thread[]>([]);
-  const commentsByThread = reactive<Record<string, Comment[]>>({});
-  const openThreadId = ref<string | null>(null);
-  const me = ref<{ sub: string; name: string } | null>(null);
+// UI state.
+export const active = ref(false);
+export const panelOpen = ref(false);
+export const showResolved = ref(false);
+export const openThreadId = ref<string | null>(null);
+export const currentRoute = ref<string>(window.location.pathname);
 
-  async function loadMe(): Promise<void> {
-    if (me.value) return;
-    me.value = await api.me();
-  }
+// DOM-tracker outputs (written by dom-tracker.ts, read by Pin/Inspector).
+// `shallowRef` so identity-change is the only re-render trigger.
+export const tick = shallowRef(0);
+export const elementMap = shallowRef<ElementMap>(new Map());
 
-  const threadsForCurrentRoute = computed(() =>
-    threads.value.filter((t) => t.route === currentRoute.value),
-  );
+// Static mount options. Seeded by overlay.ts before App.vue mounts; readers
+// see a value from the first render.
+export const options = shallowRef<OverlayOptions | null>(null);
 
-  // Resolved threads are hidden unless the user opted in via the panel toggle.
-  const visibleThreads = computed(() =>
-    showResolved.value
-      ? threadsForCurrentRoute.value
-      : threadsForCurrentRoute.value.filter((t) => t.status === "open"),
-  );
-
-  async function refreshThreads(): Promise<void> {
-    threads.value = await api.listThreads({
-      includeResolved: showResolved.value,
-    });
-  }
-
-  async function loadComments(threadId: string): Promise<void> {
-    commentsByThread[threadId] = await api.listComments(threadId);
-  }
-
-  async function openThread(id: string | null): Promise<void> {
-    openThreadId.value = id;
-    if (id) {
-      panelOpen.value = true;
-      await loadComments(id);
-    }
-  }
-
-  async function toggleResolved(thread: Thread): Promise<void> {
-    const next = thread.status === "open" ? "resolved" : "open";
-    const updated = await api.setStatus(thread.id, next);
-    if (!updated) return;
-    const i = threads.value.findIndex((t) => t.id === thread.id);
-    if (i >= 0) threads.value.splice(i, 1, updated);
-  }
-
-  async function updateThreadPosition(
-    thread: Thread,
-    x_ratio: number,
-    y_ratio: number,
-  ): Promise<void> {
-    const i = threads.value.findIndex((t) => t.id === thread.id);
-    if (i < 0) return;
-    const prev = threads.value[i];
-    threads.value.splice(i, 1, { ...prev, x_ratio, y_ratio });
-    let final: Thread = prev;
-    try {
-      final = (await api.updatePosition(thread.id, x_ratio, y_ratio)) ?? prev;
-    } catch (err) {
-      console.error("[stickynote] updatePosition failed", err);
-    }
-    // Re-find: `refreshThreads` may have replaced the array while awaiting.
-    const j = threads.value.findIndex((t) => t.id === thread.id);
-    if (j >= 0) threads.value.splice(j, 1, final);
-  }
-
-  async function createThread(
-    input: Omit<Parameters<ApiClient["createThread"]>[0], "route" | "url">,
-  ): Promise<Thread> {
-    const result = await api.createThread({
-      ...input,
-      route: currentRoute.value,
-      url: window.location.href,
-    });
-    threads.value = [result.thread, ...threads.value];
-    commentsByThread[result.thread.id] = result.comments;
-    return result.thread;
-  }
-
-  async function reply(threadId: string, body: string): Promise<void> {
-    const c = await api.createReply(threadId, body);
-    if (!c) return;
-    const list = commentsByThread[threadId] ?? [];
-    commentsByThread[threadId] = [...list, c];
-  }
-
-  async function editComment(id: string, body: string): Promise<void> {
-    const c = await api.editComment(id, body);
-    if (!c) return;
-    const list = commentsByThread[c.thread_id] ?? [];
-    commentsByThread[c.thread_id] = list.map((x) => (x.id === id ? c : x));
-  }
-
-  async function deleteComment(id: string): Promise<void> {
-    const result = await api.deleteComment(id);
-    if (result.thread_deleted) {
-      // Head-comment removal cascades; reflect locally.
-      const target = Object.entries(commentsByThread).find(([, list]) =>
-        list.some((x) => x.id === id),
-      );
-      if (target) {
-        const [tid] = target;
-        threads.value = threads.value.filter((t) => t.id !== tid);
-        delete commentsByThread[tid];
-        if (openThreadId.value === tid) openThreadId.value = null;
-      }
-      return;
-    }
-    if (result.comment) {
-      const c = result.comment;
-      const list = commentsByThread[c.thread_id] ?? [];
-      commentsByThread[c.thread_id] = list.map((x) => (x.id === id ? c : x));
-    }
-  }
-
-  // Panel-open and thread-selection are one invariant: closing the panel
-  // always discards the currently-open thread. Going through this helper
-  // keeps that fact in one place — callers never poke `panelOpen` directly.
-  function closePanel(): void {
-    panelOpen.value = false;
-    openThreadId.value = null;
-  }
-
-  function togglePanel(): void {
-    if (panelOpen.value) closePanel();
-    else panelOpen.value = true;
-  }
-
-  function toggleActive(): void {
-    active.value = !active.value;
-    if (active.value) {
-      void loadMe();
-      void refreshThreads();
-    } else {
-      closePanel();
-    }
-  }
-
-  return {
-    options,
-    api,
-    active,
-    panelOpen,
-    showResolved,
-    currentRoute,
-    threads,
-    commentsByThread,
-    openThreadId,
-    me,
-    threadsForCurrentRoute,
-    visibleThreads,
-    toggleActive,
-    closePanel,
-    togglePanel,
-    refreshThreads,
-    loadComments,
-    openThread,
-    toggleResolved,
-    updateThreadPosition,
-    createThread,
-    reply,
-    editComment,
-    deleteComment,
-  };
+// Panel-open and thread-selection are one invariant: closing the panel
+// always discards the currently-open thread. Centralising it keeps callers
+// from poking `panelOpen` directly.
+export function closePanel(): void {
+  panelOpen.value = false;
+  openThreadId.value = null;
 }
 
-function currentPath(): string {
-  return window.location.pathname;
+export function togglePanel(): void {
+  if (panelOpen.value) closePanel();
+  else panelOpen.value = true;
 }
 
-type RouterLike = {
-  currentRoute: { value: { fullPath: string; matched: { path: string }[] } };
-};
-
-// Prefer the host app's vue-router so we get route patterns ("/users/:id")
-// per PLAN §7.3. Falls back to popstate when no router is installed; we
-// intentionally don't monkey-patch history.pushState/replaceState.
-export function setupRouteTracking(store: StickynoteStore): () => void {
-  const router = findHostRouter();
-  if (router) {
-    return watch(
-      () => router.currentRoute.value,
-      (r) => {
-        const matched = r.matched[r.matched.length - 1];
-        store.currentRoute.value = matched?.path ?? r.fullPath;
-        void store.refreshThreads();
-      },
-      { immediate: true },
-    );
-  }
-  const onPop = (): void => {
-    store.currentRoute.value = currentPath();
-    void store.refreshThreads();
-  };
-  window.addEventListener("popstate", onPop);
-  return () => window.removeEventListener("popstate", onPop);
+export function openThread(id: string | null): void {
+  openThreadId.value = id;
+  if (id) panelOpen.value = true;
 }
 
-function findHostRouter(): RouterLike | null {
-  // Any inspector-tagged element belongs to the host app's tree; from there
-  // we walk up to its component and read the app's globalProperties.
-  const anchor = document.querySelector("[data-v-inspector]");
-  if (!anchor) return null;
-  const inst = findInstance(anchor);
-  const router = inst?.appContext?.config?.globalProperties?.$router;
-  return (router as RouterLike | undefined) ?? null;
+export function toggleActive(): void {
+  active.value = !active.value;
+  if (!active.value) closePanel();
 }

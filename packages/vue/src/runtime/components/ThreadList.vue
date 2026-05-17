@@ -1,39 +1,27 @@
 <script setup lang="ts">
-import { computed, inject, ref } from "vue";
-import { ELEMENT_MAP_KEY } from "../cache.ts";
+import { useMutation } from "@tanstack/vue-query";
+import { computed, ref } from "vue";
+
+import { useThreadsList } from "../composables.ts";
 import { componentName, isThreadStale } from "../inspector.ts";
-import { useStore } from "../store-inject.ts";
+import { serverMutations } from "../mutations.ts";
+import { queryClient } from "../query-client.ts";
+import { elementMap, openThread, openThreadId, options } from "../state.ts";
 import type { Thread } from "../types.ts";
 import CommentForm from "./CommentForm.vue";
 
-const store = useStore();
-const elementMap = inject(ELEMENT_MAP_KEY);
+const { visible } = useThreadsList();
+const createThread = useMutation(serverMutations.threads.create(), queryClient);
 
 const showPageWideForm = ref(false);
 
-const grouped = computed(() => {
-  const all = store.visibleThreads.value;
-  return {
-    pageWide: all.filter((t) => t.component_path == null),
-    component: all.filter((t) => t.component_path != null),
-  };
-});
+const grouped = computed(() => ({
+  pageWide: visible.value.filter((t) => t.component_path == null),
+  component: visible.value.filter((t) => t.component_path != null),
+}));
 
 function isStale(t: Thread): boolean {
-  const map = elementMap?.value;
-  return map ? isThreadStale(t, map) : false;
-}
-
-function summary(t: Thread): string {
-  // Prefer the live in-memory copy when it exists so edits to the head comment
-  // reflect immediately; fall back to the body snapshotted by the list API.
-  const list = store.commentsByThread[t.id];
-  if (list && list.length > 0) {
-    const head = list[0];
-    if (head?.deleted_at) return "[deleted]";
-    return head?.body ?? "(no body)";
-  }
-  return t.first_comment_body;
+  return isThreadStale(t, elementMap.value);
 }
 
 function compLabel(t: Thread): string {
@@ -41,17 +29,14 @@ function compLabel(t: Thread): string {
   return componentName(t.component_path);
 }
 
-async function open(t: Thread): Promise<void> {
-  await store.openThread(t.id);
-}
-
 async function createPageWide(body: string): Promise<void> {
-  await store.createThread({
+  if (!options.value) return;
+  await createThread.mutateAsync({
     component_path: null,
     component_line: null,
     component_index: 0,
-    commit_hash: store.options.commitHash,
-    dirty_build: store.options.dirtyBuild,
+    commit_hash: options.value.commitHash,
+    dirty_build: options.value.dirtyBuild,
     x_ratio: 0,
     y_ratio: 0,
     viewport_w: window.innerWidth,
@@ -73,15 +58,15 @@ async function createPageWide(body: string): Promise<void> {
         v-for="t in grouped.pageWide"
         :key="t.id"
         class="sn-thread-card"
-        :class="{ 'sn-active-thread': store.openThreadId.value === t.id }"
-        @click="open(t)"
+        :class="{ 'sn-active-thread': openThreadId === t.id }"
+        @click="openThread(t.id)"
       >
         <div class="sn-thread-meta">
           <span class="sn-comp">{{ compLabel(t) }}</span>
           <span>· {{ t.created_by_name }}</span>
           <span v-if="t.status === 'resolved'">· resolved</span>
         </div>
-        <div class="sn-thread-body">{{ summary(t) }}</div>
+        <div class="sn-thread-body">{{ t.first_comment_body }}</div>
       </div>
       <div v-if="showPageWideForm" class="sn-thread-card">
         <CommentForm
@@ -106,10 +91,10 @@ async function createPageWide(body: string): Promise<void> {
         :key="t.id"
         class="sn-thread-card"
         :class="{
-          'sn-active-thread': store.openThreadId.value === t.id,
+          'sn-active-thread': openThreadId === t.id,
           'sn-thread-stale': isStale(t),
         }"
-        @click="open(t)"
+        @click="openThread(t.id)"
       >
         <div class="sn-thread-meta">
           <span class="sn-comp">{{ compLabel(t) }}</span>
@@ -117,7 +102,7 @@ async function createPageWide(body: string): Promise<void> {
           <span v-if="t.status === 'resolved'">· resolved</span>
           <span v-if="isStale(t)" class="sn-badge">stale</span>
         </div>
-        <div class="sn-thread-body">{{ summary(t) }}</div>
+        <div class="sn-thread-body">{{ t.first_comment_body }}</div>
       </div>
     </div>
   </div>

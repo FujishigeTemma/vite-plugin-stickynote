@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { computed, inject, onBeforeUnmount, onMounted, reactive, watch } from "vue";
-import { ELEMENT_MAP_KEY, TICK_KEY } from "../cache.ts";
+import { useMutation } from "@tanstack/vue-query";
+import { useDraggable, useEventListener } from "@vueuse/core";
+import { computed, onBeforeUnmount, reactive, useTemplateRef, watch } from "vue";
+
+import { useThreadsList } from "../composables.ts";
 import {
   clearSelectionHighlights,
   hideHighlight,
@@ -11,25 +14,27 @@ import {
 } from "../highlight.ts";
 import {
   buildGithubUrl,
+  clamp,
   componentName,
   findElementInMap,
   findOccurrenceIndex,
   parseInspector,
 } from "../inspector.ts";
+import { serverMutations } from "../mutations.ts";
 import { isJumpModifier } from "../platform.ts";
-import { useStore } from "../store-inject.ts";
+import { queryClient } from "../query-client.ts";
+import { elementMap, openThreadId, options, tick, toggleActive } from "../state.ts";
 import {
   ancestorChain,
   findInstance,
-  type Instance,
   instanceInspector,
   instanceName,
   instanceRect,
+  type Instance,
 } from "../vue-instance.ts";
 
-const store = useStore();
-const tick = inject(TICK_KEY);
-const elementMap = inject(ELEMENT_MAP_KEY);
+const { threads } = useThreadsList();
+const createThread = useMutation(serverMutations.threads.create(), queryClient);
 
 type SelectedComponent = {
   component_path: string;
@@ -44,8 +49,6 @@ const composer = reactive<{
   rect: { left: number; top: number; width: number; height: number } | null;
   pinX: number;
   pinY: number;
-  dialogX: number;
-  dialogY: number;
   primary: SelectedComponent | null;
   additional: SelectedComponent[];
 }>({
@@ -55,37 +58,18 @@ const composer = reactive<{
   rect: null,
   pinX: 0,
   pinY: 0,
-  dialogX: 0,
-  dialogY: 0,
   primary: null,
   additional: [],
 });
 
-let dialogDragOffset: { dx: number; dy: number } | null = null;
+const composerEl = useTemplateRef<HTMLElement>("composerEl");
+const composerHandleEl = useTemplateRef<HTMLElement>("composerHandleEl");
 
-function onDialogPointerDown(e: PointerEvent): void {
-  if (e.button !== 0) return;
-  dialogDragOffset = {
-    dx: e.clientX - composer.dialogX,
-    dy: e.clientY - composer.dialogY,
-  };
-  (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
-}
-
-function onDialogPointerMove(e: PointerEvent): void {
-  if (!dialogDragOffset) return;
-  e.preventDefault();
-  composer.dialogX = e.clientX - dialogDragOffset.dx;
-  composer.dialogY = e.clientY - dialogDragOffset.dy;
-}
-
-function onDialogPointerUp(e: PointerEvent): void {
-  const target = e.currentTarget as Element;
-  if (target.hasPointerCapture?.(e.pointerId)) {
-    target.releasePointerCapture?.(e.pointerId);
-  }
-  dialogDragOffset = null;
-}
+const { x: dialogX, y: dialogY } = useDraggable(composerEl, {
+  handle: composerHandleEl,
+  initialValue: { x: 0, y: 0 },
+  preventDefault: true,
+});
 
 let lastEvent: MouseEvent | null = null;
 let altHeld = false;
@@ -101,10 +85,8 @@ function eventInOverlay(e: Event): boolean {
   return t instanceof Element && !!t.closest("[data-stickynote-ignore]");
 }
 
-// Resolve the Vue component owning the hovered DOM element. Walks up via
-// `__vueParentComponent` per PLAN §7.9 so non-Vue elements (text, bare divs)
-// fall back to their nearest owning component. With Alt held, step one
-// level outward.
+// With Alt held, step one level outward in the component chain so wrappers
+// stay reachable when their inner element fills the rect.
 function pickInstance(e: MouseEvent): Instance | null {
   const target = e.target;
   if (!(target instanceof Element)) return null;
@@ -123,7 +105,7 @@ function jumpModifierActive(e?: MouseEvent | KeyboardEvent): boolean {
 }
 
 function renderHighlight(): void {
-  if (!lastEvent) {
+  if (!lastEvent || !options.value) {
     hideHighlight();
     return;
   }
@@ -145,7 +127,7 @@ function renderHighlight(): void {
   const info = data ? parseInspector(data) : null;
   const name = instanceName(inst);
   const githubUrl = info
-    ? buildGithubUrl(store.options.githubRepo, store.options.commitHash, info.path, info.line)
+    ? buildGithubUrl(options.value.githubRepo, options.value.commitHash, info.path, info.line)
     : null;
   const rect = { left: r.left, top: r.top, width: r.width, height: r.height };
   if (jumpModifierActive(lastEvent) && info && githubUrl) {
@@ -153,7 +135,7 @@ function renderHighlight(): void {
       rect,
       mode: "jump",
       source: `${info.path}:${info.line}`,
-      commit: store.options.commitHash,
+      commit: options.value.commitHash,
     });
   } else {
     showHighlight({
@@ -186,7 +168,7 @@ function onKey(e: KeyboardEvent): void {
   }
   if (e.key === "Escape") {
     if (composer.visible) closeComposer();
-    else store.toggleActive();
+    else toggleActive();
   }
 }
 
@@ -207,8 +189,8 @@ function sameComponent(a: SelectedComponent, b: SelectedComponent): boolean {
 
 function onClickCapture(e: MouseEvent): void {
   if (eventInOverlay(e)) return;
-  // capture-phase preventDefault also suppresses host <a> navigation, so
-  // the jump path's window.open is the only navigation that runs.
+  // capture-phase preventDefault also suppresses host <a> navigation, so the
+  // jump path's window.open is the only navigation that runs.
   e.preventDefault();
   e.stopPropagation();
   e.stopImmediatePropagation();
@@ -216,16 +198,15 @@ function onClickCapture(e: MouseEvent): void {
   if (!inst) return;
   const data = instanceInspector(inst);
   const info = data ? parseInspector(data) : null;
-  if (!info || !data) return;
+  if (!info || !data || !options.value) return;
 
-  // Cmd (mac) / Ctrl (win/linux) + click: jump to source on GitHub. The
-  // hover label can't host a clickable link (it follows the cursor and
-  // would disappear before reaching it), so the affordance lives on the
+  // Cmd/Ctrl+click: jump to source on GitHub. The hover label can't host a
+  // clickable link (it follows the cursor), so the affordance lives on the
   // highlighted rect itself via this modifier.
   if (jumpModifierActive(e)) {
     const url = buildGithubUrl(
-      store.options.githubRepo,
-      store.options.commitHash,
+      options.value.githubRepo,
+      options.value.commitHash,
       info.path,
       info.line,
     );
@@ -253,15 +234,14 @@ function onClickCapture(e: MouseEvent): void {
     return;
   }
 
-  // Plain click (or shift+click with no composer): open a new composer for
-  // this single component. Any in-progress composer is discarded.
+  // Plain click (or shift+click with no composer): open a new composer.
   const r = instanceRect(inst);
   if (!r) return;
   composer.rect = { left: r.left, top: r.top, width: r.width, height: r.height };
   composer.pinX = e.clientX;
   composer.pinY = e.clientY;
-  composer.dialogX = e.clientX + 12;
-  composer.dialogY = e.clientY + 12;
+  dialogX.value = Math.min(window.innerWidth - 340, Math.max(0, e.clientX + 12));
+  dialogY.value = Math.min(window.innerHeight - 220, Math.max(0, e.clientY + 12));
   composer.primary = sel;
   composer.additional = [];
   composer.body = "";
@@ -276,10 +256,10 @@ function findAnchorElement(start: Element | null, data: string): Element | null 
 }
 
 function refreshSelectionHighlights(): void {
-  const map = elementMap?.value;
+  const map = elementMap.value;
   const composerActive = composer.visible && composer.primary;
-  const openId = store.openThreadId.value;
-  if (!map || (!composerActive && !openId)) {
+  const openId = openThreadId.value;
+  if (!composerActive && !openId) {
     clearSelectionHighlights();
     return;
   }
@@ -291,7 +271,7 @@ function refreshSelectionHighlights(): void {
       ...composer.additional.map((c) => ({ ...c, primary: false })),
     ];
   } else {
-    const thread = openId ? store.threads.value.find((t) => t.id === openId) : null;
+    const thread = openId ? threads.value.find((t) => t.id === openId) : null;
     if (thread && thread.component_path != null && thread.component_line != null) {
       all = [
         {
@@ -343,21 +323,21 @@ function closeComposer(): void {
   refreshSelectionHighlights();
 }
 
-async function submitComposer(): Promise<void> {
-  if (!composer.primary || !composer.rect) return;
+function submitComposer(): void {
+  if (!composer.primary || !composer.rect || !options.value) return;
   if (!composer.body.trim()) return;
   composer.saving = true;
   const x_ratio = (composer.pinX - composer.rect.left) / composer.rect.width;
   const y_ratio = (composer.pinY - composer.rect.top) / composer.rect.height;
-  try {
-    await store.createThread({
+  createThread.mutate(
+    {
       component_path: composer.primary.component_path,
       component_line: composer.primary.component_line,
       component_index: composer.primary.component_index,
-      commit_hash: store.options.commitHash,
-      dirty_build: store.options.dirtyBuild,
-      x_ratio: clamp01(x_ratio),
-      y_ratio: clamp01(y_ratio),
+      commit_hash: options.value.commitHash,
+      dirty_build: options.value.dirtyBuild,
+      x_ratio: clamp(x_ratio),
+      y_ratio: clamp(y_ratio),
       viewport_w: window.innerWidth,
       viewport_h: window.innerHeight,
       additional_components: composer.additional.map((c) => ({
@@ -366,55 +346,33 @@ async function submitComposer(): Promise<void> {
         index: c.component_index,
       })),
       body: composer.body,
-    });
-    closeComposer();
-  } catch (err) {
-    console.error("[stickynote] failed to create thread", err);
-  } finally {
-    composer.saving = false;
-  }
-}
-
-function clamp01(n: number): number {
-  return Math.max(0, Math.min(1, n));
+    },
+    {
+      onSettled: () => (composer.saving = false),
+      onSuccess: () => closeComposer(),
+    },
+  );
 }
 
 const composerStyle = computed(() => ({
-  left: Math.min(window.innerWidth - 340, Math.max(0, composer.dialogX)) + "px",
-  top: Math.min(window.innerHeight - 220, Math.max(0, composer.dialogY)) + "px",
+  left: Math.min(window.innerWidth - 340, Math.max(0, dialogX.value)) + "px",
+  top: Math.min(window.innerHeight - 220, Math.max(0, dialogY.value)) + "px",
 }));
 
-// Recompute on every overlay tick (scroll, resize, DOM mutation) so the
-// highlight and selection rects follow their source elements.
-watch(
-  () => tick?.value ?? 0,
-  () => {
-    renderHighlight();
-    refreshSelectionHighlights();
-  },
-);
-
-watch(
-  () => store.openThreadId.value,
-  () => refreshSelectionHighlights(),
-);
-
-onMounted(() => {
-  document.addEventListener("mouseover", onMouseOver, true);
-  document.addEventListener("click", onClickCapture, true);
-  window.addEventListener("keydown", onKey);
-  window.addEventListener("keyup", onKey);
-  window.addEventListener("blur", onWindowBlur);
+watch(tick, () => {
+  renderHighlight();
+  refreshSelectionHighlights();
 });
 
-onBeforeUnmount(() => {
-  document.removeEventListener("mouseover", onMouseOver, true);
-  document.removeEventListener("click", onClickCapture, true);
-  window.removeEventListener("keydown", onKey);
-  window.removeEventListener("keyup", onKey);
-  window.removeEventListener("blur", onWindowBlur);
-  removeHighlight();
-});
+watch(openThreadId, () => refreshSelectionHighlights());
+
+useEventListener(document, "mouseover", onMouseOver, { capture: true });
+useEventListener(document, "click", onClickCapture, { capture: true });
+useEventListener(window, "keydown", onKey);
+useEventListener(window, "keyup", onKey);
+useEventListener(window, "blur", onWindowBlur);
+
+onBeforeUnmount(() => removeHighlight());
 </script>
 
 <template>
@@ -426,17 +384,12 @@ onBeforeUnmount(() => {
   <Teleport to=".sn-composer-layer" defer>
     <div
       v-if="composer.visible && composer.rect"
+      ref="composerEl"
       class="sn-composer-overlay"
       :style="composerStyle"
       @click.stop
     >
-      <div
-        class="sn-composer-target"
-        @pointerdown="onDialogPointerDown"
-        @pointermove="onDialogPointerMove"
-        @pointerup="onDialogPointerUp"
-        @pointercancel="onDialogPointerUp"
-      >
+      <div ref="composerHandleEl" class="sn-composer-target">
         <div class="sn-composer-primary">
           {{ composer.primary?.component_path }}:{{ composer.primary?.component_line }} (#{{
             composer.primary?.component_index

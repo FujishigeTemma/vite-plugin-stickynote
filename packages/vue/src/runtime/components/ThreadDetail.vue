@@ -1,28 +1,32 @@
 <script setup lang="ts">
+import { useMutation, useQuery } from "@tanstack/vue-query";
 import { computed } from "vue";
+
+import { useThreadsList } from "../composables.ts";
 import { buildGithubUrl, componentName } from "../inspector.ts";
-import { useStore } from "../store-inject.ts";
+import { serverMutations } from "../mutations.ts";
+import { serverQueries } from "../queries/server.ts";
+import { queryClient } from "../query-client.ts";
+import { openThread, openThreadId, options } from "../state.ts";
 import CommentForm from "./CommentForm.vue";
 import CommentItem from "./CommentItem.vue";
 
-const store = useStore();
+const { threads } = useThreadsList();
+const { data: comments } = useQuery(serverQueries.comments.list(openThreadId), queryClient);
+
+const reply = useMutation(serverMutations.comments.create(), queryClient);
+const setStatus = useMutation(serverMutations.threads.setStatus(), queryClient);
 
 const thread = computed(() => {
-  const id = store.openThreadId.value;
+  const id = openThreadId.value;
   if (!id) return null;
-  return store.threads.value.find((t) => t.id === id) ?? null;
-});
-
-const comments = computed(() => {
-  const id = store.openThreadId.value;
-  if (!id) return [];
-  return store.commentsByThread[id] ?? [];
+  return threads.value.find((t) => t.id === id) ?? null;
 });
 
 const githubUrl = computed(() => {
-  if (!thread.value) return null;
+  if (!thread.value || !options.value) return null;
   return buildGithubUrl(
-    store.options.githubRepo,
+    options.value.githubRepo,
     thread.value.commit_hash,
     thread.value.component_path,
     thread.value.component_line,
@@ -44,31 +48,31 @@ const componentLabel = computed(() => {
 const additionalLinks = computed(() => {
   const t = thread.value;
   if (!t || !t.additional_components || t.additional_components.length === 0) return [];
+  const repo = options.value?.githubRepo ?? null;
   return t.additional_components.map((c) => ({
     key: `${c.path}:${c.line}#${c.index}`,
     label: `${componentName(c.path)} · ${c.path}:${c.line}`,
-    url: buildGithubUrl(store.options.githubRepo, t.commit_hash, c.path, c.line),
+    url: buildGithubUrl(repo, t.commit_hash, c.path, c.line),
   }));
 });
 
-async function reply(body: string): Promise<void> {
+function onReply(body: string): void {
   if (!thread.value) return;
-  await store.reply(thread.value.id, body);
+  reply.mutate({ threadId: thread.value.id, body });
 }
 
-async function toggleResolved(): Promise<void> {
+function toggleResolved(): void {
   if (!thread.value) return;
-  await store.toggleResolved(thread.value);
-}
-
-function back(): void {
-  void store.openThread(null);
+  const next = thread.value.status === "open" ? "resolved" : "open";
+  setStatus.mutate({ id: thread.value.id, status: next });
 }
 </script>
 
 <template>
   <div v-if="thread" class="sn-thread-detail">
-    <button class="sn-detail-back" type="button" @click="back">← back to threads</button>
+    <button class="sn-detail-back" type="button" @click="openThread(null)">
+      ← back to threads
+    </button>
     <div class="sn-detail-meta">
       <span>{{ componentLabel }}</span>
       <a v-if="githubUrl" :href="githubUrl" target="_blank" rel="noopener">github</a>
@@ -82,9 +86,9 @@ function back(): void {
       </li>
     </ul>
     <div class="sn-comments">
-      <CommentItem v-for="c in comments" :key="c.id" :comment="c" />
+      <CommentItem v-for="c in comments ?? []" :key="c.id" :comment="c" />
     </div>
-    <CommentForm submit-label="Reply" @submit="reply" />
+    <CommentForm submit-label="Reply" @submit="onReply" />
     <div class="sn-form-actions">
       <button type="button" @click="toggleResolved">
         {{ thread.status === "open" ? "Resolve" : "Reopen" }}

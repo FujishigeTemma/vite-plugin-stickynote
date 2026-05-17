@@ -1,22 +1,17 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, provide, watch } from "vue";
-import { ELEMENT_MAP_KEY, TICK_KEY, type OverlayCache } from "../cache.ts";
-import { setupRouteTracking, type StickynoteStore } from "../state.ts";
-import { STORE_KEY } from "../store-inject.ts";
+import { useEventListener } from "@vueuse/core";
+
+import { useDomTracker } from "../dom-tracker.ts";
+import { useRouteTracker } from "../route-tracker.ts";
+import { active, toggleActive } from "../state.ts";
 import Inspector from "./Inspector.vue";
 import Panel from "./Panel.vue";
 import PinLayer from "./PinLayer.vue";
 import StalePinTray from "./StalePinTray.vue";
 import StatusBar from "./StatusBar.vue";
 
-const props = defineProps<{
-  store: StickynoteStore;
-  cache: OverlayCache;
-}>();
-
-provide(STORE_KEY, props.store);
-provide(TICK_KEY, props.cache.tick);
-provide(ELEMENT_MAP_KEY, props.cache.elementMap);
+useRouteTracker();
+useDomTracker();
 
 function onKeyDown(e: KeyboardEvent): void {
   // Match by `code` too — some IMEs / layouts produce different `key` values
@@ -25,48 +20,12 @@ function onKeyDown(e: KeyboardEvent): void {
   if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && isPeriod) {
     e.preventDefault();
     e.stopPropagation();
-    props.store.toggleActive();
+    toggleActive();
   }
 }
 
-// Poll for new threads while the overlay is active. 5 s is a comfortable
-// upper bound for "near-realtime" without burning CPU.
-const POLL_MS = 5000;
-let pollTimer: ReturnType<typeof setInterval> | null = null;
-let stopRouteTracking: () => void = () => {};
-
-watch(
-  () => props.store.active.value,
-  (a) => {
-    if (a) {
-      props.cache.start();
-      pollTimer = setInterval(() => {
-        void props.store.refreshThreads();
-      }, POLL_MS);
-    } else {
-      props.cache.stop();
-      if (pollTimer) {
-        clearInterval(pollTimer);
-        pollTimer = null;
-      }
-    }
-  },
-);
-
-onMounted(() => {
-  // Capture phase so we hear it even if the host app stops propagation.
-  window.addEventListener("keydown", onKeyDown, true);
-  // By App.vue's onMounted the host app has rendered in the overwhelmingly
-  // common case, so `findHostRouter`'s DOM probe finds something.
-  stopRouteTracking = setupRouteTracking(props.store);
-});
-
-onBeforeUnmount(() => {
-  window.removeEventListener("keydown", onKeyDown, true);
-  if (pollTimer) clearInterval(pollTimer);
-  stopRouteTracking();
-  props.cache.stop();
-});
+// Capture phase so we hear it even if the host app stops propagation.
+useEventListener(window, "keydown", onKeyDown, { capture: true });
 </script>
 
 <template>
@@ -75,7 +34,7 @@ onBeforeUnmount(() => {
   selection overlays into this root, so they sit at the very bottom; the
   composer is teleported into the trailing `.sn-composer-layer` so it sits at
   the very top, above pins, the panel, and the highlights. -->
-  <div v-if="props.store.active.value" class="sn-root">
+  <div v-if="active" class="sn-root">
     <Inspector />
     <PinLayer />
     <StalePinTray />

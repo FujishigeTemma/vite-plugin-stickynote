@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { useStore } from "../store-inject.ts";
+import { useThreadsList } from "../composables.ts";
 import Pin from "./Pin.vue";
 
-const store = useStore();
+const { visible } = useThreadsList();
 </script>
 
 <template>
-  <Pin v-for="thread in store.visibleThreads.value" :key="thread.id" :thread="thread" />
+  <Pin v-for="thread in visible" :key="thread.id" :thread="thread" />
 </template>

@@ -1,10 +1,12 @@
+import { VueQueryPlugin } from "@tanstack/vue-query";
 import { createApp } from "vue";
-import { createApi } from "./api.ts";
-import { createOverlayCache } from "./cache.ts";
-import { removeHighlight } from "./highlight.ts";
-import { createStore } from "./state.ts";
-import App from "./components/App.vue";
+
 import type { OverlayOptions } from "../options.ts";
+import { clearAPIClient, initAPIClient } from "./api-client.ts";
+import App from "./components/App.vue";
+import { removeHighlight } from "./highlight.ts";
+import { queryClient } from "./query-client.ts";
+import { options } from "./state.ts";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -13,7 +15,7 @@ declare global {
 
 // Idempotent: HMR re-evaluates this module, so a previous mount is detected
 // via the global stash and torn down first.
-export function mount(options: OverlayOptions): { unmount: () => void } {
+export function mount(opts: OverlayOptions): { unmount: () => void } {
   globalThis.__STICKYNOTE_MOUNT__?.();
 
   const host = document.createElement("div");
@@ -25,13 +27,13 @@ export function mount(options: OverlayOptions): { unmount: () => void } {
   host.style.cssText = "all:revert;";
   document.body.appendChild(host);
 
-  const api = createApi(options.apiUrl, () => options.devBearer);
-  const store = createStore(options, api);
-  const cache = createOverlayCache();
+  initAPIClient(opts.apiUrl, () => opts.devBearer);
+  options.value = opts;
 
-  const app = createApp(App, { store, cache });
+  const app = createApp(App);
+  app.use(VueQueryPlugin, { queryClient });
 
-  (window as unknown as { __STICKYNOTE__?: unknown }).__STICKYNOTE__ = store;
+  (window as unknown as { __STICKYNOTE__?: unknown }).__STICKYNOTE__ = { queryClient };
 
   try {
     app.mount(host);
@@ -44,6 +46,9 @@ export function mount(options: OverlayOptions): { unmount: () => void } {
     app.unmount();
     host.remove();
     removeHighlight();
+    clearAPIClient();
+    queryClient.clear();
+    options.value = null;
     delete (window as unknown as { __STICKYNOTE__?: unknown }).__STICKYNOTE__;
     globalThis.__STICKYNOTE_MOUNT__ = undefined;
   };
