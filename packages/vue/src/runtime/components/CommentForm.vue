@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, useTemplateRef } from "vue";
 
 const props = defineProps<{
   initialBody?: string;
@@ -12,36 +12,31 @@ const emit = defineEmits<{
 }>();
 
 const body = ref(props.initialBody ?? "");
-const saving = ref(false);
+const formRef = useTemplateRef<HTMLFormElement>("formRef");
 
-watch(
-  () => props.initialBody,
-  (next) => {
-    body.value = next ?? "";
-  },
-);
-
-async function submit(): Promise<void> {
+function submit(): void {
   const text = body.value.trim();
   if (!text) return;
-  saving.value = true;
-  try {
-    emit("submit", text);
-    body.value = "";
-  } finally {
-    saving.value = false;
+  emit("submit", text);
+  body.value = "";
+}
+
+function onKeydown(e: KeyboardEvent): void {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    formRef.value?.requestSubmit();
   }
 }
 </script>
 
 <template>
-  <div class="sn-form">
-    <textarea v-model="body" placeholder="Write a comment…" />
+  <form ref="formRef" class="sn-form" @submit.prevent="submit">
+    <textarea v-model="body" placeholder="Write a comment…" @keydown="onKeydown" />
     <div class="sn-form-actions">
       <button v-if="props.cancelable" type="button" @click="emit('cancel')">cancel</button>
-      <button type="button" class="sn-primary" :disabled="saving || !body.trim()" @click="submit">
+      <button type="submit" class="sn-primary" :disabled="!body.trim()">
         {{ props.submitLabel ?? "Reply" }}
       </button>
     </div>
-  </div>
+  </form>
 </template>

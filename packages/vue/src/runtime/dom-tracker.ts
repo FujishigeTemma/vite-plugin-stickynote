@@ -1,5 +1,5 @@
 import { useMutationObserver } from "@vueuse/core";
-import { computed, onScopeDispose, watch } from "vue";
+import { computed, onScopeDispose } from "vue";
 
 import { active, domVersion } from "./state.ts";
 
@@ -45,14 +45,6 @@ export function useDomTracker(): void {
       if (relevant(records)) bump();
     },
     { childList: true, subtree: true },
-  );
-
-  watch(
-    active,
-    (a) => {
-      if (a) bump();
-    },
-    { immediate: true },
   );
 
   onScopeDispose(() => cancelAnimationFrame(raf));

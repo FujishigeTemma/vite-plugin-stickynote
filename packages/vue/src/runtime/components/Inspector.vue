@@ -36,7 +36,6 @@ type SelectedComponent = Omit<Component, "id" | "display_order">;
 const composer = reactive<{
   visible: boolean;
   body: string;
-  saving: boolean;
   rect: { left: number; top: number; width: number; height: number } | null;
   pinX: number;
   pinY: number;
@@ -47,7 +46,6 @@ const composer = reactive<{
 }>({
   visible: false,
   body: "",
-  saving: false,
   rect: null,
   pinX: 0,
   pinY: 0,
@@ -56,6 +54,7 @@ const composer = reactive<{
 
 const composerEl = useTemplateRef<HTMLElement>("composerEl");
 const composerHandleEl = useTemplateRef<HTMLElement>("composerHandleEl");
+const composerFormEl = useTemplateRef<HTMLFormElement>("composerFormEl");
 
 const { x: dialogX, y: dialogY } = useDraggable(composerEl, {
   handle: composerHandleEl,
@@ -229,10 +228,8 @@ function onClickCapture(e: MouseEvent): void {
     return;
   }
 
-  // Plain click (or shift+click with no composer): open a new composer.
-  // Read the rect once here to compute click→ratio at submit; the element's
-  // live position afterwards is irrelevant — we want the ratio at the moment
-  // the user picked.
+  // Snapshot the rect at pick time: the click→ratio must reflect the
+  // element's position when the user picked, not when they submit.
   const r = p.el.getBoundingClientRect();
   composer.rect = { left: r.left, top: r.top, width: r.width, height: r.height };
   composer.pinX = e.clientX;
@@ -254,14 +251,12 @@ function closeComposer(): void {
   composer.components = [];
   composer.rect = null;
   composer.body = "";
-  composer.saving = false;
 }
 
 function submitComposer(): void {
   const primary = composer.components[0];
   if (!primary || !composer.rect || !options.value) return;
   if (!composer.body.trim()) return;
-  composer.saving = true;
   const x_ratio = (composer.pinX - composer.rect.left) / composer.rect.width;
   const y_ratio = (composer.pinY - composer.rect.top) / composer.rect.height;
   createThread.mutate(
@@ -281,10 +276,16 @@ function submitComposer(): void {
       body: composer.body,
     },
     {
-      onSettled: () => (composer.saving = false),
       onSuccess: () => closeComposer(),
     },
   );
+}
+
+function onComposerKeydown(e: KeyboardEvent): void {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    composerFormEl.value?.requestSubmit();
+  }
 }
 
 const composerStyle = computed(() => ({
@@ -357,20 +358,24 @@ onScopeDispose(() => {
         </div>
         <div class="sn-composer-hint">shift+click to link more components</div>
       </div>
-      <div class="sn-form">
-        <textarea v-model="composer.body" placeholder="Leave a comment…" autofocus />
+      <form ref="composerFormEl" class="sn-form" @submit.prevent="submitComposer">
+        <textarea
+          v-model="composer.body"
+          placeholder="Leave a comment…"
+          autofocus
+          @keydown="onComposerKeydown"
+        />
         <div class="sn-form-actions">
           <button type="button" @click="closeComposer">cancel</button>
           <button
-            type="button"
+            type="submit"
             class="sn-primary"
-            :disabled="composer.saving || !composer.body.trim()"
-            @click="submitComposer"
+            :disabled="createThread.isPending.value || !composer.body.trim()"
           >
-            {{ composer.saving ? "Saving…" : "Pin" }}
+            {{ createThread.isPending.value ? "Saving…" : "Pin" }}
           </button>
         </div>
-      </div>
+      </form>
     </div>
   </Teleport>
 </template>
