@@ -1,0 +1,7 @@
+interface:
+  display_name: "Modern Vue"
+  short_description: "Opinionated Vue 3.5 + Router Data Loaders + Query patterns"
+  default_prompt: "Use $modern-vue to implement or review a Vue 3.5 SPA with Vue Router v5 file-based routing, Router Data Loaders, and TanStack Query Vue v5."
+
+policy:
+  allow_implicit_invocation: true
