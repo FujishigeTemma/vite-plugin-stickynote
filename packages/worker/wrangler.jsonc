@@ -9,6 +9,10 @@
   // Non-secret runtime config. Override per environment as needed.
   // ALLOWED_ORIGINS is a comma-separated list of full origins.
   // CLERK_PUBLISHABLE_KEY is non-secret; set per environment.
+  //
+  // IMPORTANT: after deploying to your own account, replace ALLOWED_ORIGINS
+  // with your real dev origin(s). The localhost defaults are for this repo's
+  // own `wrangler dev` only. See packages/worker/DEPLOY.md.
   "vars": {
     "ALLOWED_ORIGINS": "http://localhost:5173,http://localhost:5174",
   },
@@ -16,6 +20,10 @@
   // from `wrangler secret put …` in deployed envs (secret key only).
   // CLERK_ISSUER=dev + DEV_BEARER + DEV_USER_NAME enable the local-dev
   // static-bearer escape hatch. See `.dev.vars.example`.
+  //
+  // The `database_id` below is a placeholder. The "Deploy to Cloudflare"
+  // button provisions a fresh D1 and rewrites this field; manual deploys
+  // should run `wrangler d1 create stickynote` and paste the returned ID.
   "d1_databases": [
     {
       "binding": "DB",
