@@ -131,7 +131,7 @@ prevents collision with host-page CSS. -->
   height: 28px;
   margin-left: -14px;
   margin-top: -28px;
-  border: none;
+  border: 2px solid transparent;
   border-radius: 14px 14px 14px 0;
   background: #f59e0b;
   color: white;
@@ -164,9 +164,7 @@ prevents collision with host-page CSS. -->
   transform: scale(1.2);
 }
 .sn-pin.sn-pin-open {
-  box-shadow:
-    0 0 0 2px #1f2937,
-    0 4px 8px rgba(0, 0, 0, 0.2);
+  border-color: #fff;
 }
 
 .sn-badge {
