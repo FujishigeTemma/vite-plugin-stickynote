@@ -74,6 +74,7 @@ function clearHover(): void {
 
 const composerEl = useTemplateRef<HTMLElement>("composerEl");
 const composerHandleEl = useTemplateRef<HTMLElement>("composerHandleEl");
+const composerFormEl = useTemplateRef<HTMLFormElement>("composerFormEl");
 
 const { x: dialogX, y: dialogY } = useDraggable(composerEl, {
   handle: composerHandleEl,
@@ -273,6 +274,13 @@ function submitComposer(): void {
   );
 }
 
+function onComposerKeydown(e: KeyboardEvent): void {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    composerFormEl.value?.requestSubmit();
+  }
+}
+
 const composerStyle = computed(() => ({
   left: Math.min(window.innerWidth - 340, Math.max(0, dialogX.value)) + "px",
   top: Math.min(window.innerHeight - 220, Math.max(0, dialogY.value)) + "px",
@@ -338,20 +346,24 @@ onScopeDispose(() => setHoverAnchor(null));
         </div>
         <div class="sn-composer-hint">shift+click to link more components</div>
       </div>
-      <div class="sn-form">
-        <textarea v-model="composer.body" placeholder="Leave a comment…" autofocus />
+      <form ref="composerFormEl" class="sn-form" @submit.prevent="submitComposer">
+        <textarea
+          v-model="composer.body"
+          placeholder="Leave a comment…"
+          autofocus
+          @keydown="onComposerKeydown"
+        />
         <div class="sn-form-actions">
           <button type="button" @click="closeComposer">cancel</button>
           <button
-            type="button"
+            type="submit"
             class="sn-primary"
             :disabled="composer.saving || !composer.body.trim()"
-            @click="submitComposer"
           >
             {{ composer.saving ? "Saving…" : "Pin" }}
           </button>
         </div>
-      </div>
+      </form>
     </div>
   </Teleport>
 </template>
