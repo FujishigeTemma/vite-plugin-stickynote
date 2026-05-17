@@ -1,30 +1,27 @@
 <script setup lang="ts">
 import { useMutation } from "@tanstack/vue-query";
 import { useDraggable, useEventListener, useKeyModifier } from "@vueuse/core";
-import { computed, onScopeDispose, reactive, ref, useTemplateRef, watch } from "vue";
+import { computed, onScopeDispose, reactive, ref, shallowRef, useTemplateRef, watch } from "vue";
 
 import { clearAnchor, stampAnchor } from "../anchor-binding.ts";
 import {
+  ancestorsWithInspector,
   buildGithubUrl,
   clamp,
   componentKey,
-  findInspectorDescendant,
+  defaultDepthFor,
+  elementDisplayName,
   findOccurrenceIndex,
+  getInspectorData,
+  nearestComponentRoot,
   parseInspector,
   sameComponent,
 } from "../inspector.ts";
 import { serverMutations } from "../mutations.ts";
 import { isJumpModifier } from "../platform.ts";
 import { queryClient } from "../query-client.ts";
-import { openThreadId, options, toggleActive } from "../state.ts";
+import { domVersion, openThreadId, options, toggleActive } from "../state.ts";
 import type { Component } from "../types.ts";
-import {
-  ancestorChain,
-  findInstance,
-  instanceInspector,
-  instanceName,
-  type Instance,
-} from "../vue-instance.ts";
 import HoverHighlight, { type HoverInfo } from "./HoverHighlight.vue";
 import SelectionLayer from "./SelectionLayer.vue";
 
@@ -57,21 +54,6 @@ const composer = reactive<{
   components: [],
 });
 
-const hoverInfo = ref<HoverInfo | null>(null);
-
-let hoverEl: HTMLElement | null = null;
-function setHoverAnchor(el: HTMLElement | null): void {
-  if (el === hoverEl) return;
-  clearAnchor(hoverEl, HOVER_ANCHOR);
-  if (el) stampAnchor(el, HOVER_ANCHOR);
-  hoverEl = el;
-}
-
-function clearHover(): void {
-  setHoverAnchor(null);
-  hoverInfo.value = null;
-}
-
 const composerEl = useTemplateRef<HTMLElement>("composerEl");
 const composerHandleEl = useTemplateRef<HTMLElement>("composerHandleEl");
 
@@ -84,28 +66,50 @@ const { x: dialogX, y: dialogY } = useDraggable(composerEl, {
 // `useKeyModifier` reads `evt.getModifierState(...)` on each tracked event
 // (keydown/keyup/mousedown/mouseup), so it stays accurate across Cmd+Tab
 // blur and won't get stuck in the held state.
-const altMod = useKeyModifier("Alt");
 const metaMod = useKeyModifier("Meta");
 const ctrlMod = useKeyModifier("Control");
 
-let lastEvent: MouseEvent | null = null;
+// Hover state as reactive primitives. Everything downstream (`pick`,
+// `hoverInfo`, the CSS anchor stamp) is a `computed` / `watch` derivative —
+// no imperative renderHighlight() to keep in sync with multiple call sites.
+const lastEvent = shallowRef<MouseEvent | null>(null);
+const lastInnermost = shallowRef<Element | null>(null);
+// Absolute index into ancestorsWithInspector(lastEvent.target), innermost-first.
+// Default = the owning component's root (matches pre-Alt+arrow behavior); Alt+
+// ArrowDown drills below (into divs), Alt+ArrowUp climbs above.
+const depth = ref(0);
 
 function eventInOverlay(e: Event): boolean {
   const t = e.target;
   return t instanceof Element && !!t.closest("[data-stickynote-ignore]");
 }
 
-// With Alt held, step one level outward in the component chain so wrappers
-// stay reachable when their inner element fills the rect.
-function pickInstance(e: MouseEvent): Instance | null {
-  const target = e.target;
-  if (!(target instanceof Element)) return null;
-  const owner = findInstance(target);
-  if (!owner) return null;
-  if (!(altMod.value || e.altKey)) return owner;
-  const chain = ancestorChain(owner);
-  return chain[1] ?? owner;
-}
+type Pick = {
+  el: HTMLElement;
+  data: string;
+  path: string;
+  line: number;
+};
+
+// `void domVersion.value` subscribes to host-DOM mutations so the pick auto-
+// refreshes after HMR / v-for re-renders — same pattern as useStaleThreads
+// in composables.ts. v_for_index is intentionally NOT computed here:
+// findOccurrenceIndex is a document-wide querySelectorAll, and the hover path
+// fires on every mouseover. Pay that cost only on click.
+const pick = computed<Pick | null>(() => {
+  void domVersion.value;
+  const ev = lastEvent.value;
+  if (!ev || !(ev.target instanceof Element)) return null;
+  const chain = ancestorsWithInspector(ev.target);
+  if (chain.length === 0) return null;
+  const idx = Math.min(Math.max(depth.value, 0), chain.length - 1);
+  const el = chain[idx];
+  if (!(el instanceof HTMLElement)) return null;
+  const data = getInspectorData(el);
+  const info = parseInspector(data);
+  if (!info || !data) return null;
+  return { el, data, path: info.path, line: info.line };
+});
 
 function jumpModifierActive(e?: MouseEvent | KeyboardEvent): boolean {
   return isJumpModifier({
@@ -114,56 +118,76 @@ function jumpModifierActive(e?: MouseEvent | KeyboardEvent): boolean {
   });
 }
 
-function renderHighlight(): void {
-  if (!lastEvent || !options.value || eventInOverlay(lastEvent)) {
-    clearHover();
-    return;
-  }
-  const inst = pickInstance(lastEvent);
-  const el = inst ? ((inst.subTree?.el ?? inst.vnode?.el) as Element | null) : null;
-  // Fragment-rooted components have no single anchor element. Drop the
-  // highlight rather than guess; click-to-pin still works because that path
-  // uses findOccurrenceIndex against the element the user actually clicked.
-  if (!inst || !el || el.nodeType !== 1) {
-    clearHover();
-    return;
-  }
-  setHoverAnchor(el as HTMLElement);
-
-  const data = instanceInspector(inst);
-  const info = data ? parseInspector(data) : null;
-  const githubUrl =
-    info &&
-    buildGithubUrl(options.value.githubRepo, options.value.commitHash, info.path, info.line);
-  if (jumpModifierActive(lastEvent) && info && githubUrl) {
-    hoverInfo.value = {
+const hoverInfo = computed<HoverInfo | null>(() => {
+  const ev = lastEvent.value;
+  if (!ev || !options.value || eventInOverlay(ev)) return null;
+  const p = pick.value;
+  if (!p) return null;
+  const githubUrl = buildGithubUrl(
+    options.value.githubRepo,
+    options.value.commitHash,
+    p.path,
+    p.line,
+  );
+  if (jumpModifierActive(ev) && githubUrl) {
+    return {
       mode: "jump",
-      source: `${info.path}:${info.line}`,
+      source: `${p.path}:${p.line}`,
       commit: options.value.commitHash,
     };
-    return;
   }
-  hoverInfo.value = {
+  return {
     mode: "info",
-    name: instanceName(inst),
-    source: info ? `${info.path}:${info.line}` : null,
+    name: elementDisplayName(p.el),
+    source: `${p.path}:${p.line}`,
   };
-}
+});
+
+// Stamp / clear the CSS anchor whenever the picked element changes. The
+// stamp itself is a side effect on the host DOM, so it stays a watch — the
+// computed describes WHICH element, this watch keeps the host DOM in sync.
+let stampedEl: HTMLElement | null = null;
+watch(
+  () => (hoverInfo.value ? (pick.value?.el ?? null) : null),
+  (el) => {
+    if (el === stampedEl) return;
+    clearAnchor(stampedEl, HOVER_ANCHOR);
+    if (el) stampAnchor(el, HOVER_ANCHOR);
+    stampedEl = el;
+  },
+);
 
 function onMouseOver(e: MouseEvent): void {
-  lastEvent = e;
-  renderHighlight();
+  lastEvent.value = e;
+  const target = e.target instanceof Element ? e.target : null;
+  const newInnermost = target ? nearestComponentRoot(target) : null;
+  if (newInnermost !== lastInnermost.value) {
+    lastInnermost.value = newInnermost;
+    const chain = target ? ancestorsWithInspector(target) : [];
+    depth.value = target ? defaultDepthFor(target, chain) : 0;
+  }
 }
-
-// Modifier-key changes re-pick the instance (Alt) and re-evaluate label
-// mode (Cmd/Ctrl) without a new mouse event.
-watch([altMod, metaMod, ctrlMod], () => renderHighlight());
 
 function onKey(e: KeyboardEvent): void {
   if (e.key === "Escape") {
     if (composer.visible) closeComposer();
     else toggleActive();
+    return;
   }
+  // Alt+ArrowUp/Down: step depth. Require Alt as the sole modifier so we
+  // don't collide with Cmd-arrow word navigation or browser Alt+Shift combos.
+  if (!e.altKey || e.shiftKey || e.metaKey || e.ctrlKey) return;
+  if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+  const ev = lastEvent.value;
+  if (!ev || !(ev.target instanceof Element)) return;
+  const chain = ancestorsWithInspector(ev.target);
+  if (chain.length === 0) return;
+  // Capture-phase listener consumes the key before inputs see it, so a
+  // focused textarea doesn't move its caret while inspecting.
+  e.preventDefault();
+  e.stopPropagation();
+  if (e.key === "ArrowUp") depth.value = Math.min(depth.value + 1, chain.length - 1);
+  else depth.value = Math.max(depth.value - 1, 0);
 }
 
 function onClickCapture(e: MouseEvent): void {
@@ -173,33 +197,24 @@ function onClickCapture(e: MouseEvent): void {
   e.preventDefault();
   e.stopPropagation();
   e.stopImmediatePropagation();
-  const inst = pickInstance(e);
-  if (!inst) return;
-  const data = instanceInspector(inst);
-  const info = data ? parseInspector(data) : null;
-  if (!info || !data || !options.value) return;
+  // Pin the highlighted element, not e.target — depth may have stepped away.
+  const p = pick.value;
+  if (!p || !options.value) return;
 
   // Cmd/Ctrl+click: jump to source on GitHub. The hover label can't host a
   // clickable link (it follows the cursor), so the affordance lives on the
   // highlighted rect itself via this modifier.
   if (jumpModifierActive(e)) {
-    const url = buildGithubUrl(
-      options.value.githubRepo,
-      options.value.commitHash,
-      info.path,
-      info.line,
-    );
+    const url = buildGithubUrl(options.value.githubRepo, options.value.commitHash, p.path, p.line);
     if (url) window.open(url, "_blank", "noopener");
     return;
   }
 
-  const anchor = (inst.subTree?.el ?? inst.vnode?.el) as Element | null;
-  const targetEl = findInspectorDescendant(anchor, data) ?? document.body;
   const sel: SelectedComponent = {
-    path: info.path,
-    line: info.line,
-    v_for_index: findOccurrenceIndex(targetEl, data),
-    name: instanceName(inst),
+    path: p.path,
+    line: p.line,
+    v_for_index: findOccurrenceIndex(p.el, p.data),
+    name: elementDisplayName(p.el),
   };
 
   // Shift+click with composer open: Finder-style multi-select. Toggle the
@@ -218,8 +233,7 @@ function onClickCapture(e: MouseEvent): void {
   // Read the rect once here to compute click→ratio at submit; the element's
   // live position afterwards is irrelevant — we want the ratio at the moment
   // the user picked.
-  if (!anchor || anchor.nodeType !== 1) return;
-  const r = (anchor as Element).getBoundingClientRect();
+  const r = p.el.getBoundingClientRect();
   composer.rect = { left: r.left, top: r.top, width: r.width, height: r.height };
   composer.pinX = e.clientX;
   composer.pinY = e.clientY;
@@ -286,9 +300,14 @@ const selectionPicks = computed(() =>
 
 useEventListener(document, "mouseover", onMouseOver, { capture: true });
 useEventListener(document, "click", onClickCapture, { capture: true });
-useEventListener(window, "keydown", onKey);
+// Capture phase so a focused <input>/<textarea> doesn't swallow Alt+ArrowUp/Down
+// (caret move) before we consume it.
+useEventListener(window, "keydown", onKey, { capture: true });
 
-onScopeDispose(() => setHoverAnchor(null));
+onScopeDispose(() => {
+  clearAnchor(stampedEl, HOVER_ANCHOR);
+  stampedEl = null;
+});
 </script>
 
 <template>

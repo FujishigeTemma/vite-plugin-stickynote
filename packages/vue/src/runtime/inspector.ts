@@ -4,6 +4,7 @@
 // rendered DOM — no Vue private API access needed.
 
 import type { Component, Thread } from "./types.ts";
+import { findInstance, instanceName, rootElement } from "./vue-instance.ts";
 
 // Identity for a component occurrence in the DOM: same template site +
 // same v-for iteration. Used as map/list/Vue keys and for equality checks.
@@ -53,7 +54,9 @@ export function nearestComponentRoot(el: Element | null): Element | null {
   return el?.closest(SELECTOR) ?? null;
 }
 
-// All component-root ancestors, deepest first. Used by Alt-key parent walk.
+// All inspector-tagged ancestors, innermost first. Used to build the
+// Alt+ArrowUp/Down stepwise navigation chain — every step is a concrete
+// `path:line` site that can be pinned, including bare `<div>`s.
 export function ancestorsWithInspector(start: Element): Element[] {
   const out: Element[] = [];
   let el: Element | null = start.closest(SELECTOR);
@@ -62,6 +65,27 @@ export function ancestorsWithInspector(start: Element): Element[] {
     el = el.parentElement?.closest(SELECTOR) ?? null;
   }
   return out;
+}
+
+// Default depth in the `chain` for `cursorEl`: the index of its owning
+// component's rendered root. Plain hover then highlights the enclosing
+// component (matching pre-Alt+arrow behavior); Alt+Down drills below.
+export function defaultDepthFor(cursorEl: Element, chain: Element[]): number {
+  const inst = findInstance(cursorEl);
+  if (!inst) return 0;
+  const root = rootElement(inst);
+  if (!root) return 0;
+  const i = chain.indexOf(root);
+  return i >= 0 ? i : 0;
+}
+
+// Component name when `el` is the rendered root of an owning instance;
+// tag name otherwise. Lets chips distinguish "MyButton" from a plain
+// "div" inside it that share path:line.
+export function elementDisplayName(el: Element): string {
+  const inst = findInstance(el);
+  if (inst && rootElement(inst) === el) return instanceName(inst);
+  return el.tagName.toLowerCase();
 }
 
 // When a component renders N times (lists), file:line is not unique.

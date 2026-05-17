@@ -3,8 +3,6 @@
 // non-component DOM (text nodes, plain divs) by walking up to the nearest
 // owning component.
 
-const ATTR = "data-v-inspector";
-
 type Vnode = { el?: Node | null; component?: Instance | null; children?: Vnode[] };
 
 export type Instance = {
@@ -26,19 +24,6 @@ export function findInstance(el: Element | null): Instance | null {
   return null;
 }
 
-// Returns the chain of owning components from deepest to root, deduping
-// repeats (each component appears once even if its subtree spans multiple
-// elements that all point at the same instance).
-export function ancestorChain(inst: Instance): Instance[] {
-  const out: Instance[] = [];
-  let cur: Instance | null | undefined = inst;
-  while (cur) {
-    if (!out.includes(cur)) out.push(cur);
-    cur = cur.parent ?? null;
-  }
-  return out;
-}
-
 export function instanceName(inst: Instance | null | undefined): string {
   if (!inst) return "Anonymous";
   const t = inst.type;
@@ -53,10 +38,9 @@ export function instanceName(inst: Instance | null | undefined): string {
 
 // Concrete element this instance currently occupies. For fragments, returns
 // null — caller should fall back to the union of child rects.
-function rootElement(inst: Instance): HTMLElement | null {
+export function rootElement(inst: Instance): HTMLElement | null {
   const el = inst.subTree?.el ?? inst.vnode?.el;
-  if (el && (el as HTMLElement).nodeType === 1) return el as HTMLElement;
-  return null;
+  return el instanceof HTMLElement ? el : null;
 }
 
 // Bounding rect of an instance. Handles fragments by unioning every child
@@ -100,40 +84,6 @@ function vnodeRect(v: Vnode): DOMRect | null {
     const range = document.createRange();
     range.selectNode(el);
     return range.getBoundingClientRect();
-  }
-  return null;
-}
-
-// Source location (path:line) for an instance. Tries the instance's own
-// root element first, then walks down into its rendered subtree looking for
-// any element carrying the build-time `data-v-inspector` attribute. We need
-// this because fragment-rooted components don't have a single root element
-// to read from, and host-app elements that lack the attr can still belong to
-// a parent component whose template was tagged.
-export function instanceInspector(inst: Instance): string | null {
-  const root = rootElement(inst);
-  if (root) {
-    const own = root.getAttribute(ATTR);
-    if (own) return own;
-    const inside = root.querySelector(`[${ATTR}]`);
-    if (inside) return inside.getAttribute(ATTR);
-  }
-  const sub = inst.subTree;
-  if (sub?.children) {
-    for (const child of sub.children) {
-      const found = vnodeInspector(child);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
-function vnodeInspector(v: Vnode): string | null {
-  if (v.component) return instanceInspector(v.component);
-  const el = v.el;
-  if (el && (el as HTMLElement).nodeType === 1) {
-    const e = el as HTMLElement;
-    return e.getAttribute(ATTR) ?? e.querySelector(`[${ATTR}]`)?.getAttribute(ATTR) ?? null;
   }
   return null;
 }
