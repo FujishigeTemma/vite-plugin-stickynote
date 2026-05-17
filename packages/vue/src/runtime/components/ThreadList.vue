@@ -2,15 +2,15 @@
 import { useMutation } from "@tanstack/vue-query";
 import { computed, ref } from "vue";
 
-import { useThreadsList } from "../composables.ts";
-import { isThreadStale } from "../inspector.ts";
+import { useStaleThreads, useThreadsList } from "../composables.ts";
 import { serverMutations } from "../mutations.ts";
 import { queryClient } from "../query-client.ts";
-import { elementMap, openThread, openThreadId, options } from "../state.ts";
+import { openThread, openThreadId, options } from "../state.ts";
 import type { Thread } from "../types.ts";
 import CommentForm from "./CommentForm.vue";
 
 const { visible } = useThreadsList();
+const { isStale } = useStaleThreads(visible);
 const createThread = useMutation(serverMutations.threads.create(), queryClient);
 
 const showPageWideForm = ref(false);
@@ -19,10 +19,6 @@ const grouped = computed(() => ({
   pageWide: visible.value.filter((t) => t.components.length === 0),
   component: visible.value.filter((t) => t.components.length > 0),
 }));
-
-function isStale(t: Thread): boolean {
-  return isThreadStale(t, elementMap.value);
-}
 
 function compLabel(t: Thread): string {
   return t.components[0]?.name ?? "page-wide";

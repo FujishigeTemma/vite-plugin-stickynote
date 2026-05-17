@@ -1,7 +1,6 @@
 import { ref, shallowRef } from "vue";
 
 import type { OverlayOptions } from "../options.ts";
-import { type ElementMap } from "./inspector.ts";
 
 // Plain reactive refs for everything that isn't server state. Server state
 // (threads / comments / me) lives in TanStack Query; UI flags, DOM-tracker
@@ -15,10 +14,10 @@ export const showResolved = ref(false);
 export const openThreadId = ref<string | null>(null);
 export const currentRoute = ref<string>(window.location.pathname);
 
-// DOM-tracker outputs (written by dom-tracker.ts, read by Pin/Inspector).
-// `shallowRef` so identity-change is the only re-render trigger.
-export const tick = shallowRef(0);
-export const elementMap = shallowRef<ElementMap>(new Map());
+// Bumped by dom-tracker when the host DOM gains or loses an inspector-tagged
+// element. Sole trigger for re-resolving (path, line, index) → live element
+// bindings; position follow-through is handled by CSS Anchor Positioning.
+export const domVersion = shallowRef(0);
 
 // Static mount options. Seeded by overlay.ts before App.vue mounts; readers
 // see a value from the first render.

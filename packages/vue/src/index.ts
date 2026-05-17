@@ -31,7 +31,7 @@ function overlayPlugin(
   meta: { commit: string; dirty: boolean; root: string },
 ): Plugin {
   return {
-    name: "vite-plugin-stickynote",
+    name: "@vite-plugin-stickynote/vue",
     apply: "serve",
     resolveId(id) {
       if (id === VIRTUAL_MOUNT) return id;

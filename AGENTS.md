@@ -1,3 +1,13 @@
+# 設計原則
+
+- シンプルさを最優先
+- 疎結合かつ高凝集
+- There should be one-- and preferably only one --obvious way to do it
+- YAGNI（You Aren't Gonna Need It）を徹底
+- 早すぎる最適化は避ける
+- 複雑な抽象化を避け、必要最低限の本質を本質的なAPIで設計する
+- composable over configuration
+
 <!--VITE PLUS START-->
 
 # Using Vite+, the Unified Toolchain for the Web

@@ -46,6 +46,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 25.8.0
+      '@vite-plugin-stickynote/vue':
+        specifier: workspace:*
+        version: link:../../packages/vue
       '@vitejs/plugin-vue':
         specifier: ^6.0.7
         version: 6.0.7(@voidzero-dev/vite-plus-core@0.1.21(@types/node@25.8.0)(esbuild@0.27.3)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0))(vue@3.5.34(typescript@6.0.3))
@@ -55,9 +58,6 @@ importers:
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@latest
         version: '@voidzero-dev/vite-plus-core@0.1.21(@types/node@25.8.0)(esbuild@0.27.3)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0)'
-      vite-plugin-stickynote:
-        specifier: workspace:*
-        version: link:../../packages/vue
       vite-plus:
         specifier: 'catalog:'
         version: 0.1.21(@types/node@25.8.0)(@voidzero-dev/vite-plus-core@0.1.21(@types/node@25.8.0)(esbuild@0.27.3)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0))(esbuild@0.27.3)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0)
@@ -86,12 +86,12 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 25.8.0
+      '@vite-plugin-stickynote/worker':
+        specifier: workspace:*
+        version: link:../worker
       '@vitejs/plugin-vue':
         specifier: ^6.0.7
         version: 6.0.7(@voidzero-dev/vite-plus-core@0.1.21(@types/node@25.8.0)(esbuild@0.27.3)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0))(vue@3.5.34(typescript@6.0.3))
-      stickynote-worker:
-        specifier: workspace:*
-        version: link:../worker
       typescript:
         specifier: 'catalog:'
         version: 6.0.3

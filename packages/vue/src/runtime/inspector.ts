@@ -7,10 +7,16 @@ import type { Component, Thread } from "./types.ts";
 
 // Identity for a component occurrence in the DOM: same template site +
 // same v-for iteration. Used as map/list/Vue keys and for equality checks.
-type ComponentKeyParts = Pick<Component, "path" | "line" | "v_for_index">;
+export type ComponentKeyParts = Pick<Component, "path" | "line" | "v_for_index">;
 
 export function componentKey(c: ComponentKeyParts): string {
   return `${c.path}:${c.line}#${c.v_for_index}`;
+}
+
+// CSS custom-ident form of the component key — paths and `:` / `#` aren't
+// legal in `anchor-name` values, so non-ident chars collapse to `_`.
+export function componentAnchorName(c: ComponentKeyParts): string {
+  return `--sn-sel-${componentKey(c).replaceAll(/[^a-zA-Z0-9_-]/g, "_")}`;
 }
 
 export function sameComponent(a: ComponentKeyParts, b: ComponentKeyParts): boolean {
@@ -68,44 +74,28 @@ export function findOccurrenceIndex(target: Element, data: string): number {
   return 0;
 }
 
-// Map from "path:line" → component-root elements in document order. Built
-// once per DOM-change tick so pins can look up their anchor without a fresh
-// tree walk each time.
-export type ElementMap = Map<string, Element[]>;
-
-export function buildElementMap(): ElementMap {
-  const map: ElementMap = new Map();
-  const all = document.querySelectorAll(SELECTOR);
-  for (const el of all) {
-    const raw = el.getAttribute(ATTR);
-    if (!raw) continue;
-    const list = map.get(raw);
-    if (list) list.push(el);
-    else map.set(raw, [el]);
-  }
-  return map;
+// The one and only way to resolve a persisted (path, line, index) tuple back
+// to a live DOM element. Lookups are rare (per-pin, on dom-version bump), so
+// an indexed cache buys nothing over a direct attribute query.
+export function findComponentElement(path: string, line: number, index: number): Element | null {
+  const list = document.querySelectorAll(`[${ATTR}="${CSS.escape(`${path}:${line}`)}"]`);
+  return list[index] ?? null;
 }
 
-export function findElementInMap(
-  map: ElementMap,
-  path: string,
-  line: number,
-  index: number,
-): Element | null {
-  const matches = map.get(`${path}:${line}`);
-  if (!matches || matches.length === 0) return null;
-  return matches[index] ?? null;
+// Locate the element carrying the exact `data-v-inspector` value at or below
+// `start`. Used when a Vue instance's root element is a wrapper that itself
+// lacks the attribute (e.g. component picked through __vueParentComponent).
+export function findInspectorDescendant(start: Element | null, data: string): Element | null {
+  if (!start) return null;
+  if (start.getAttribute?.(ATTR) === data) return start;
+  return start.querySelector?.(`[${ATTR}="${CSS.escape(data)}"]`) ?? null;
 }
 
-export function findThreadAnchor(thread: Thread, elementMap: ElementMap): Element | null {
-  const primary = thread.components[0];
-  if (!primary) return null;
-  return findElementInMap(elementMap, primary.path, primary.line, primary.v_for_index);
-}
-
-export function isThreadStale(thread: Thread, elementMap: ElementMap): boolean {
+export function isThreadStale(thread: Thread): boolean {
   if (thread.components.length === 0) return false;
-  return findThreadAnchor(thread, elementMap) == null;
+  const primary = thread.components[0];
+  if (!primary) return false;
+  return findComponentElement(primary.path, primary.line, primary.v_for_index) == null;
 }
 
 export function clamp(n: number): number {

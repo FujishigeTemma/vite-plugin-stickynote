@@ -1,17 +1,9 @@
 <script setup lang="ts">
-import { computed } from "vue";
-
-import { useThreadsList } from "../composables.ts";
-import { isThreadStale } from "../inspector.ts";
-import { elementMap, openThread } from "../state.ts";
+import { useStaleThreads, useThreadsList } from "../composables.ts";
+import { openThread } from "../state.ts";
 
 const { visible } = useThreadsList();
-
-// Surface pinned components whose anchor has disappeared (refactor / rename)
-// so the comment isn't silently lost.
-const staleThreads = computed(() =>
-  visible.value.filter((t) => isThreadStale(t, elementMap.value)),
-);
+const { stale: staleThreads } = useStaleThreads(visible);
 </script>
 
 <template>

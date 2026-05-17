@@ -14,10 +14,10 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@vite-plugin-stickynote/vue": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.7",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-stickynote": "workspace:*",
     "vite-plus": "catalog:"
   }
 }

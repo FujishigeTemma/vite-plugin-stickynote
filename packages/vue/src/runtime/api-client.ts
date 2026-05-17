@@ -1,5 +1,5 @@
 import { hc } from "hono/client";
-import type { AppType } from "stickynote-worker/app-type";
+import type { AppType } from "@vite-plugin-stickynote/worker/app-type";
 
 export type Client = ReturnType<typeof hc<AppType>>;
 export type AuthSource = () => string | Promise<string | null> | null;

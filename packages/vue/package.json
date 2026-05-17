@@ -1,5 +1,5 @@
 {
-  "name": "vite-plugin-stickynote",
+  "name": "@vite-plugin-stickynote/vue",
   "version": "0.0.0",
   "description": "In-app comment overlay for Vue dev environments — pin coordinates, threads, and replies, persisted via a Cloudflare Worker + D1.",
   "license": "MIT",
@@ -33,8 +33,8 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@vite-plugin-stickynote/worker": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.7",
-    "stickynote-worker": "workspace:*",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:",

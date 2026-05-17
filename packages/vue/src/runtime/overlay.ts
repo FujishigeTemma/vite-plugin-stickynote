@@ -4,7 +4,6 @@ import { createApp } from "vue";
 import type { OverlayOptions } from "../options.ts";
 import { clearAPIClient, initAPIClient } from "./api-client.ts";
 import App from "./components/App.vue";
-import { removeHighlight } from "./highlight.ts";
 import { queryClient } from "./query-client.ts";
 import { options } from "./state.ts";
 
@@ -45,7 +44,6 @@ export function mount(opts: OverlayOptions): { unmount: () => void } {
   const unmount = (): void => {
     app.unmount();
     host.remove();
-    removeHighlight();
     clearAPIClient();
     queryClient.clear();
     options.value = null;

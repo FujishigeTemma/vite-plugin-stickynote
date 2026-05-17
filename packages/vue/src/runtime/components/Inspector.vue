@@ -1,22 +1,14 @@
 <script setup lang="ts">
 import { useMutation } from "@tanstack/vue-query";
-import { useDraggable, useEventListener } from "@vueuse/core";
-import { computed, onBeforeUnmount, reactive, useTemplateRef, watch } from "vue";
+import { useDraggable, useEventListener, useKeyModifier } from "@vueuse/core";
+import { computed, onScopeDispose, reactive, ref, useTemplateRef, watch } from "vue";
 
-import { useThreadsList } from "../composables.ts";
-import {
-  clearSelectionHighlights,
-  hideHighlight,
-  removeHighlight,
-  showHighlight,
-  showSelectionHighlights,
-  type SelectionRect,
-} from "../highlight.ts";
+import { clearAnchor, stampAnchor } from "../anchor-binding.ts";
 import {
   buildGithubUrl,
   clamp,
   componentKey,
-  findElementInMap,
+  findInspectorDescendant,
   findOccurrenceIndex,
   parseInspector,
   sameComponent,
@@ -24,18 +16,20 @@ import {
 import { serverMutations } from "../mutations.ts";
 import { isJumpModifier } from "../platform.ts";
 import { queryClient } from "../query-client.ts";
-import { elementMap, openThreadId, options, tick, toggleActive } from "../state.ts";
+import { openThreadId, options, toggleActive } from "../state.ts";
 import type { Component } from "../types.ts";
 import {
   ancestorChain,
   findInstance,
   instanceInspector,
   instanceName,
-  instanceRect,
   type Instance,
 } from "../vue-instance.ts";
+import HoverHighlight, { type HoverInfo } from "./HoverHighlight.vue";
+import SelectionLayer from "./SelectionLayer.vue";
 
-const { threads } = useThreadsList();
+const HOVER_ANCHOR = "--sn-hover";
+
 const createThread = useMutation(serverMutations.threads.create(), queryClient);
 
 // Pre-persistence form of a component pick: server assigns `id` and
@@ -51,8 +45,7 @@ const composer = reactive<{
   pinY: number;
   // components[0] is the anchor (pin coords are relative to it) and cannot be
   // removed; later entries are shift+click-added extras and can be toggled
-  // off. Empty only before the composer opens; the v-if on .sn-composer-overlay
-  // guards rendering until composer.visible flips true.
+  // off.
   components: SelectedComponent[];
 }>({
   visible: false,
@@ -64,6 +57,21 @@ const composer = reactive<{
   components: [],
 });
 
+const hoverInfo = ref<HoverInfo | null>(null);
+
+let hoverEl: HTMLElement | null = null;
+function setHoverAnchor(el: HTMLElement | null): void {
+  if (el === hoverEl) return;
+  clearAnchor(hoverEl, HOVER_ANCHOR);
+  if (el) stampAnchor(el, HOVER_ANCHOR);
+  hoverEl = el;
+}
+
+function clearHover(): void {
+  setHoverAnchor(null);
+  hoverInfo.value = null;
+}
+
 const composerEl = useTemplateRef<HTMLElement>("composerEl");
 const composerHandleEl = useTemplateRef<HTMLElement>("composerHandleEl");
 
@@ -73,15 +81,15 @@ const { x: dialogX, y: dialogY } = useDraggable(composerEl, {
   preventDefault: true,
 });
 
-let lastEvent: MouseEvent | null = null;
-let altHeld = false;
-let metaHeld = false;
-let ctrlHeld = false;
+// `useKeyModifier` reads `evt.getModifierState(...)` on each tracked event
+// (keydown/keyup/mousedown/mouseup), so it stays accurate across Cmd+Tab
+// blur and won't get stuck in the held state.
+const altMod = useKeyModifier("Alt");
+const metaMod = useKeyModifier("Meta");
+const ctrlMod = useKeyModifier("Control");
 
-// `composedPath()` returns [] once an event finishes dispatching, and
-// `renderHighlight()` re-runs against `lastEvent` from a tick watcher, so a
-// path-based guard would let the plugin's own UI sneak through after the
-// first frame. The target node reference stays valid, so walk the DOM.
+let lastEvent: MouseEvent | null = null;
+
 function eventInOverlay(e: Event): boolean {
   const t = e.target;
   return t instanceof Element && !!t.closest("[data-stickynote-ignore]");
@@ -94,59 +102,52 @@ function pickInstance(e: MouseEvent): Instance | null {
   if (!(target instanceof Element)) return null;
   const owner = findInstance(target);
   if (!owner) return null;
-  if (!(altHeld || e.altKey)) return owner;
+  if (!(altMod.value || e.altKey)) return owner;
   const chain = ancestorChain(owner);
   return chain[1] ?? owner;
 }
 
 function jumpModifierActive(e?: MouseEvent | KeyboardEvent): boolean {
   return isJumpModifier({
-    metaKey: metaHeld || !!e?.metaKey,
-    ctrlKey: ctrlHeld || !!e?.ctrlKey,
+    metaKey: !!metaMod.value || !!e?.metaKey,
+    ctrlKey: !!ctrlMod.value || !!e?.ctrlKey,
   });
 }
 
 function renderHighlight(): void {
-  if (!lastEvent || !options.value) {
-    hideHighlight();
-    return;
-  }
-  if (eventInOverlay(lastEvent)) {
-    hideHighlight();
+  if (!lastEvent || !options.value || eventInOverlay(lastEvent)) {
+    clearHover();
     return;
   }
   const inst = pickInstance(lastEvent);
-  if (!inst) {
-    hideHighlight();
+  const el = inst ? ((inst.subTree?.el ?? inst.vnode?.el) as Element | null) : null;
+  // Fragment-rooted components have no single anchor element. Drop the
+  // highlight rather than guess; click-to-pin still works because that path
+  // uses findOccurrenceIndex against the element the user actually clicked.
+  if (!inst || !el || el.nodeType !== 1) {
+    clearHover();
     return;
   }
-  const r = instanceRect(inst);
-  if (!r || (r.width === 0 && r.height === 0)) {
-    hideHighlight();
-    return;
-  }
+  setHoverAnchor(el as HTMLElement);
+
   const data = instanceInspector(inst);
   const info = data ? parseInspector(data) : null;
-  const name = instanceName(inst);
-  const githubUrl = info
-    ? buildGithubUrl(options.value.githubRepo, options.value.commitHash, info.path, info.line)
-    : null;
-  const rect = { left: r.left, top: r.top, width: r.width, height: r.height };
+  const githubUrl =
+    info &&
+    buildGithubUrl(options.value.githubRepo, options.value.commitHash, info.path, info.line);
   if (jumpModifierActive(lastEvent) && info && githubUrl) {
-    showHighlight({
-      rect,
+    hoverInfo.value = {
       mode: "jump",
       source: `${info.path}:${info.line}`,
       commit: options.value.commitHash,
-    });
-  } else {
-    showHighlight({
-      rect,
-      mode: "info",
-      name,
-      source: info ? `${info.path}:${info.line}` : null,
-    });
+    };
+    return;
   }
+  hoverInfo.value = {
+    mode: "info",
+    name: instanceName(inst),
+    source: info ? `${info.path}:${info.line}` : null,
+  };
 }
 
 function onMouseOver(e: MouseEvent): void {
@@ -154,31 +155,15 @@ function onMouseOver(e: MouseEvent): void {
   renderHighlight();
 }
 
+// Modifier-key changes re-pick the instance (Alt) and re-evaluate label
+// mode (Cmd/Ctrl) without a new mouse event.
+watch([altMod, metaMod, ctrlMod], () => renderHighlight());
+
 function onKey(e: KeyboardEvent): void {
-  if (e.repeat) return;
-  if (e.key === "Alt") {
-    altHeld = e.type === "keydown";
-    renderHighlight();
-  }
-  if (e.key === "Meta") {
-    metaHeld = e.type === "keydown";
-    renderHighlight();
-  }
-  if (e.key === "Control") {
-    ctrlHeld = e.type === "keydown";
-    renderHighlight();
-  }
   if (e.key === "Escape") {
     if (composer.visible) closeComposer();
     else toggleActive();
   }
-}
-
-// Modifier keyup is lost when the window blurs (Cmd+Tab etc.), so flags
-// would otherwise stick "true" and leave the highlight in jump mode forever.
-function onWindowBlur(): void {
-  altHeld = metaHeld = ctrlHeld = false;
-  renderHighlight();
 }
 
 function onClickCapture(e: MouseEvent): void {
@@ -209,7 +194,7 @@ function onClickCapture(e: MouseEvent): void {
   }
 
   const anchor = (inst.subTree?.el ?? inst.vnode?.el) as Element | null;
-  const targetEl = findAnchorElement(anchor, data) ?? document.body;
+  const targetEl = findInspectorDescendant(anchor, data) ?? document.body;
   const sel: SelectedComponent = {
     path: info.path,
     line: info.line,
@@ -218,21 +203,23 @@ function onClickCapture(e: MouseEvent): void {
   };
 
   // Shift+click with composer open: Finder-style multi-select. Toggle the
-  // component in/out of the components list. The first element is the pin
-  // anchor and cannot be removed by shift+clicking it again.
+  // component in/out. The first element is the pin anchor and cannot be
+  // removed by shift+clicking it again.
   if (e.shiftKey && composer.visible && composer.components.length > 0) {
     const primary = composer.components[0];
     if (primary && sameComponent(primary, sel)) return;
     const i = composer.components.findIndex((c, idx) => idx > 0 && sameComponent(c, sel));
     if (i >= 0) composer.components.splice(i, 1);
     else composer.components.push(sel);
-    refreshSelectionHighlights();
     return;
   }
 
   // Plain click (or shift+click with no composer): open a new composer.
-  const r = instanceRect(inst);
-  if (!r) return;
+  // Read the rect once here to compute click→ratio at submit; the element's
+  // live position afterwards is irrelevant — we want the ratio at the moment
+  // the user picked.
+  if (!anchor || anchor.nodeType !== 1) return;
+  const r = (anchor as Element).getBoundingClientRect();
   composer.rect = { left: r.left, top: r.top, width: r.width, height: r.height };
   composer.pinX = e.clientX;
   composer.pinY = e.clientY;
@@ -241,55 +228,11 @@ function onClickCapture(e: MouseEvent): void {
   composer.components = [sel];
   composer.body = "";
   composer.visible = true;
-  refreshSelectionHighlights();
-}
-
-function findAnchorElement(start: Element | null, data: string): Element | null {
-  if (!start) return null;
-  if (start.getAttribute?.("data-v-inspector") === data) return start;
-  return start.querySelector?.(`[data-v-inspector="${CSS.escape(data)}"]`) ?? null;
-}
-
-function refreshSelectionHighlights(): void {
-  const map = elementMap.value;
-  const composerActive = composer.visible && composer.components.length > 0;
-  const openId = openThreadId.value;
-  if (!composerActive && !openId) {
-    clearSelectionHighlights();
-    return;
-  }
-  // Composer takes priority over an open thread when both are present.
-  // Both sources are pre-sorted such that index 0 is the pin anchor.
-  let source: SelectedComponent[] | null = null;
-  if (composerActive) {
-    source = composer.components;
-  } else {
-    const thread = openId ? threads.value.find((t) => t.id === openId) : null;
-    if (thread && thread.components.length > 0) source = thread.components;
-  }
-  if (!source) {
-    clearSelectionHighlights();
-    return;
-  }
-  const items: SelectionRect[] = [];
-  source.forEach((c, idx) => {
-    const el = findElementInMap(map, c.path, c.line, c.v_for_index);
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    if (r.width === 0 && r.height === 0) return;
-    items.push({
-      key: componentKey(c),
-      rect: { left: r.left, top: r.top, width: r.width, height: r.height },
-      label: `${idx === 0 ? "★ " : ""}${c.name}`,
-    });
-  });
-  showSelectionHighlights(items);
 }
 
 function removeAdditional(i: number): void {
   // i + 1 because index 0 is the pin anchor and cannot be removed.
   composer.components.splice(i + 1, 1);
-  refreshSelectionHighlights();
 }
 
 function closeComposer(): void {
@@ -298,7 +241,6 @@ function closeComposer(): void {
   composer.rect = null;
   composer.body = "";
   composer.saving = false;
-  refreshSelectionHighlights();
 }
 
 function submitComposer(): void {
@@ -338,28 +280,28 @@ const composerStyle = computed(() => ({
 
 const primaryComponent = computed(() => composer.components[0] ?? null);
 
-watch(tick, () => {
-  renderHighlight();
-  refreshSelectionHighlights();
-});
-
-watch(openThreadId, () => refreshSelectionHighlights());
+const selectionPicks = computed(() =>
+  composer.visible && composer.components.length > 0 ? composer.components : [],
+);
 
 useEventListener(document, "mouseover", onMouseOver, { capture: true });
 useEventListener(document, "click", onClickCapture, { capture: true });
 useEventListener(window, "keydown", onKey);
-useEventListener(window, "keyup", onKey);
-useEventListener(window, "blur", onWindowBlur);
 
-onBeforeUnmount(() => removeHighlight());
+onScopeDispose(() => setHoverAnchor(null));
 </script>
 
 <template>
+  <!-- DOM order inside .sn-root is the stack order. SelectionLayer first
+  (below) then HoverHighlight (above), so the live hover sits on top of the
+  persistent selection rectangles. -->
+  <SelectionLayer :composer-picks="selectionPicks" />
+  <HoverHighlight :info="hoverInfo" />
+
   <!-- Teleport to the trailing `.sn-composer-layer` inside `.sn-root` so the
-  composer ends up as the last DOM child of the plugin's stacking context —
-  naturally above the highlight overlays, pins, and panel without needing its
-  own z-index. `defer` lets Vue resolve the target after App.vue has rendered
-  it on the same tick. -->
+  composer ends up as the last DOM child of the plugin's stacking context.
+  `defer` lets Vue resolve the target after App.vue has rendered it on the
+  same tick. -->
   <Teleport to=".sn-composer-layer" defer>
     <div
       v-if="composer.visible && composer.rect && primaryComponent"

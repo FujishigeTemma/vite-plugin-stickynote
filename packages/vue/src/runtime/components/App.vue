@@ -30,10 +30,11 @@ useEventListener(window, "keydown", onKeyDown, { capture: true });
 
 <template>
   <!-- DOM order inside `.sn-root` *is* the stack order. Earlier siblings
-  render behind later ones. Inspector prepends its imperative hover /
-  selection overlays into this root, so they sit at the very bottom; the
-  composer is teleported into the trailing `.sn-composer-layer` so it sits at
-  the very top, above pins, the panel, and the highlights. -->
+  render behind later ones. Inspector renders its own selection / hover
+  highlight overlays first (in that order: selection below, hover above), so
+  they end up at the very bottom of the stack. Pins, tray, status, and panel
+  layer on top. The composer is teleported into the trailing
+  `.sn-composer-layer` so it sits at the very top, above everything. -->
   <div v-if="active" class="sn-root">
     <Inspector />
     <PinLayer />

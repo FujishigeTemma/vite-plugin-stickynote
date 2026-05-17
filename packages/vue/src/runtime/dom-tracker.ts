@@ -1,64 +1,59 @@
-import { useEventListener, useMutationObserver, useResizeObserver } from "@vueuse/core";
+import { useMutationObserver } from "@vueuse/core";
 import { computed, onScopeDispose, watch } from "vue";
 
-import { buildElementMap } from "./inspector.ts";
-import { active, elementMap, tick } from "./state.ts";
+import { active, domVersion } from "./state.ts";
 
-// VueUse observer/event composables auto-disconnect when their target ref
-// becomes nullish, so flipping the target on `active` gives us start/stop
-// semantics for free.
+// Bumps `domVersion` when the host DOM gains or loses an inspector-tagged
+// element — the only event that can change which element a stored
+// (path, line, index) resolves to. Position follow-through is handled by
+// CSS `anchor()` in the browser, so no scroll / resize / per-element rect
+// listeners are needed here.
+const INSPECTOR_SELECTOR = "[data-v-inspector]";
+
+function touchesInspector(node: Node): boolean {
+  if (node.nodeType !== 1) return false;
+  const el = node as Element;
+  return el.matches?.(INSPECTOR_SELECTOR) || el.querySelector?.(INSPECTOR_SELECTOR) !== null;
+}
+
+function relevant(records: MutationRecord[]): boolean {
+  for (const r of records) {
+    const target = r.target as Element;
+    // Skip mutations originating inside the overlay (own selection / hover
+    // updates would otherwise feed back here).
+    if (target.nodeType === 1 && target.closest("[data-stickynote-ignore]")) continue;
+    for (const n of r.addedNodes) if (touchesInspector(n)) return true;
+    for (const n of r.removedNodes) if (touchesInspector(n)) return true;
+  }
+  return false;
+}
+
 export function useDomTracker(): void {
   const bodyWhenActive = computed(() => (active.value ? document.body : undefined));
-  const windowWhenActive = computed(() => (active.value ? window : undefined));
 
-  let posRaf = 0;
-  let domRaf = 0;
-
-  function bumpTick(): void {
-    cancelAnimationFrame(posRaf);
-    posRaf = requestAnimationFrame(() => {
-      tick.value++;
+  let raf = 0;
+  function bump(): void {
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      domVersion.value++;
     });
   }
 
-  function rebuildMap(): void {
-    cancelAnimationFrame(domRaf);
-    domRaf = requestAnimationFrame(() => {
-      elementMap.value = buildElementMap();
-      tick.value++;
-    });
-  }
-
-  useEventListener(windowWhenActive, "scroll", bumpTick, { capture: true, passive: true });
-  useEventListener(windowWhenActive, "resize", bumpTick, { passive: true });
-  // Filter out mutations inside the plugin's own overlay — otherwise our
-  // selection-highlight / hover-card updates feed back here, bump tick, which
-  // re-renders the overlay, which mutates the DOM again, ad infinitum.
   useMutationObserver(
     bodyWhenActive,
     (records) => {
-      for (const r of records) {
-        const target = r.target as Element;
-        if (target.nodeType === 1 && target.closest("[data-stickynote-ignore]")) continue;
-        rebuildMap();
-        return;
-      }
+      if (relevant(records)) bump();
     },
     { childList: true, subtree: true },
   );
-  useResizeObserver(bodyWhenActive, bumpTick);
 
-  // Prime on the off→on edge; observers only fire on subsequent mutations.
   watch(
     active,
     (a) => {
-      if (a) rebuildMap();
+      if (a) bump();
     },
     { immediate: true },
   );
 
-  onScopeDispose(() => {
-    cancelAnimationFrame(posRaf);
-    cancelAnimationFrame(domRaf);
-  });
+  onScopeDispose(() => cancelAnimationFrame(raf));
 }

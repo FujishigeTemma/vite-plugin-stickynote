@@ -1,6 +1,6 @@
 import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vite";
-import stickynote from "vite-plugin-stickynote";
+import stickynote from "@vite-plugin-stickynote/vue";
 import VueRouter from "vue-router/vite";
 
 export default defineConfig({
@@ -19,7 +19,7 @@ export default defineConfig({
     // skips node_modules by default. Un-ignore the linked package so edits to
     // its runtime sources (served via virtual modules) trigger HMR.
     watch: {
-      ignored: ["!**/node_modules/vite-plugin-stickynote/**"],
+      ignored: ["!**/node_modules/@vite-plugin-stickynote/vue/**"],
     },
   },
 });
