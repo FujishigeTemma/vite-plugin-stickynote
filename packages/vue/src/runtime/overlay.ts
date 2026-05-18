@@ -4,6 +4,7 @@ import { createApp } from "vue";
 import type { OverlayOptions } from "../options.ts";
 import { clearAPIClient, initAPIClient } from "./api-client.ts";
 import App from "./components/App.vue";
+import { installHostRouterHook } from "./host-router.ts";
 import { queryClient } from "./query-client.ts";
 import { options } from "./state.ts";
 
@@ -16,6 +17,8 @@ declare global {
 // via the global stash and torn down first.
 export function mount(opts: OverlayOptions): { unmount: () => void } {
   globalThis.__STICKYNOTE_MOUNT__?.();
+
+  installHostRouterHook();
 
   const host = document.createElement("div");
   host.id = "stickynote-overlay-root";
