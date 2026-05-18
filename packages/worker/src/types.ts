@@ -4,12 +4,11 @@ export type Env = {
   DB: D1Database;
   ALLOWED_ORIGINS: string;
   // Production Clerk credentials. Required in prod; ignored when the local-dev
-  // escape hatch is active (CLERK_ISSUER === "dev").
+  // escape hatch is active (DEV_BEARER is set).
   CLERK_SECRET_KEY: string;
   CLERK_PUBLISHABLE_KEY: string;
-  // Local-dev escape hatch: set CLERK_ISSUER="dev" + DEV_BEARER (+ optional
-  // DEV_USER_NAME) to bypass Clerk and accept a static bearer token.
-  CLERK_ISSUER?: "dev";
+  // Local-dev escape hatch: set DEV_BEARER (+ optional DEV_USER_NAME) to
+  // bypass Clerk and accept a static bearer token.
   DEV_BEARER?: string;
   DEV_USER_NAME?: string;
 };

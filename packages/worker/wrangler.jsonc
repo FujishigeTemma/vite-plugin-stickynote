@@ -18,8 +18,8 @@
   },
   // CLERK_SECRET_KEY, CLERK_PUBLISHABLE_KEY come from `.dev.vars` in dev and
   // from `wrangler secret put …` in deployed envs (secret key only).
-  // CLERK_ISSUER=dev + DEV_BEARER + DEV_USER_NAME enable the local-dev
-  // static-bearer escape hatch. See `.dev.vars.example`.
+  // DEV_BEARER (+ optional DEV_USER_NAME) enables the local-dev static-bearer
+  // escape hatch. See `.dev.vars.example`.
   //
   // The `database_id` below is a placeholder. The "Deploy to Cloudflare"
   // button provisions a fresh D1 and rewrites this field; manual deploys

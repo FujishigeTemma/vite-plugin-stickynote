@@ -7,14 +7,11 @@ export const requireAuth = (): MiddlewareHandler<{
   Variables: Variables;
 }> => {
   return async (c, next) => {
-    // Local-dev escape hatch: static bearer gated by the "dev" sentinel.
-    // Production deploys never set CLERK_ISSUER, so this branch is unreachable
-    // when CLERK_SECRET_KEY is configured.
-    if (c.env.CLERK_ISSUER === "dev") {
-      const expected = c.env.DEV_BEARER;
-      if (!expected) {
-        return c.json({ error: "dev_bearer_not_configured" }, 500);
-      }
+    // Local-dev escape hatch: when DEV_BEARER is set in the worker env, accept
+    // a static bearer in place of a Clerk JWT. Production deploys never set
+    // DEV_BEARER, so this branch is unreachable there.
+    const expected = c.env.DEV_BEARER;
+    if (expected) {
       const header = c.req.header("Authorization");
       const token = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
       if (!token || token !== expected) {

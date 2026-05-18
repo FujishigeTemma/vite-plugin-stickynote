@@ -12,6 +12,7 @@ const count = ref(0);
 .counter {
   align-self: flex-start;
   padding: 10px 18px;
+  font-family: var(--mono);
   font-size: 16px;
   border-radius: 8px;
   border: 1px solid var(--accent-border);

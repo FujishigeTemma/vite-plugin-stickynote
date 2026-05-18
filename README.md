@@ -76,7 +76,7 @@ env:
 Things to double-check before shipping a dev build:
 
 - **CORS** — the deployed origin must be in the Worker's `ALLOWED_ORIGINS`.
-- **`devBearer` must be unset** — it's serialized into the bundle and would be readable by anyone who can load the page. It exists only for talking to a local `wrangler dev` Worker running in `CLERK_ISSUER=dev` mode. Real deploys use `setAuthSource` + Clerk JWT.
+- **`devBearer` must be unset** — it's serialized into the bundle and would be readable by anyone who can load the page. It exists only for talking to a local `wrangler dev` Worker that has `DEV_BEARER` set. Real deploys use `setAuthSource` + Clerk JWT.
 - **Git metadata** — the plugin runs `git rev-parse HEAD` at config time to stamp each pin with a commit hash (and `git status --porcelain` for a dirty flag). CI runners that do a normal `actions/checkout` are fine; shallow `git archive` extracts are not.
 
 Open the deployed dev site (or run `vp dev` locally) and toggle the overlay with the plugin's keybind. See [packages/vue/README.md](packages/vue/README.md) for the full options table.
