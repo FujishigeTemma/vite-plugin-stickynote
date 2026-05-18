@@ -14,7 +14,7 @@ In-app comment overlay for non-production builds of a Vue app. Pin coordinates, 
 The button forks the repo, provisions a D1 database, and deploys `packages/worker` to your account. Then finish three things by hand:
 
 1. `wrangler secret put CLERK_SECRET_KEY` — paste your Clerk **secret** key.
-2. Update `vars.ALLOWED_ORIGINS` in `wrangler.jsonc` (or the dashboard) to the origin(s) where your dev-mode build is served (e.g. `https://platform.p8n.dev` for a Cloudflare-hosted staging site, plus `http://localhost:5173` for local), then redeploy.
+2. Update `vars.ALLOWED_ORIGINS` in `wrangler.jsonc` (or the dashboard) to the origin(s) where your dev-mode build is served (e.g. `https://some-app.temma.dev` for a Cloudflare-hosted staging site, plus `http://localhost:5173` for local), then redeploy.
 3. Copy the deployed Worker URL — you'll pass it to the Vite plugin as `apiUrl`.
 
 Full breakdown (including manual `wrangler` fallback when the button doesn't fit your workflow) is in [packages/worker/DEPLOY.md](packages/worker/DEPLOY.md).
@@ -63,7 +63,7 @@ Registration order is not load-bearing — the auth source is read per-request, 
 
 ## Deploying with the overlay
 
-The primary use case is **CI-deployed dev builds**: the team's main branch lands on a non-production environment (e.g. `https://platform.p8n.dev`), Clerk gates access to internal users, and PMs / designers / QA leave comments directly on that running site. A representative pipeline (mirroring `console/.github/workflows/deploy-frontend.yml`):
+The primary use case is **CI-deployed dev builds**: the team's main branch lands on a non-production environment (e.g. `https://some-app.temma.dev`), Clerk gates access to internal users, and PMs / designers / QA leave comments directly on that running site. A representative pipeline (mirroring `console/.github/workflows/deploy-frontend.yml`):
 
 ```yaml
 # .github/workflows/deploy-frontend.yml
