@@ -57,6 +57,9 @@
   --sn-warning-bg: light-dark(oklch(96% 0.04 75), oklch(34% 0.07 75));
   --sn-warning-text: light-dark(oklch(45% 0.13 75), oklch(88% 0.08 75));
 
+  /* ---- Hover highlight (translucent accent overlay on host content) ---- */
+  --sn-hover-bg: light-dark(oklch(58% 0.12 205 / 0.1), oklch(70% 0.13 205 / 0.18));
+
   /* ---- Selection (coral, hue 30) ---- */
   --sn-selection-border: oklch(67% 0.18 30);
   --sn-selection-bg: oklch(67% 0.18 30 / 0.08);

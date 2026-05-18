@@ -40,7 +40,7 @@ useEventListener(
   >
     ?
   </button>
-  <Teleport to=".sn-composer-layer">
+  <Teleport to=".sn-composer-layer" defer>
     <div v-if="open" class="sn-help-backdrop" @click.self="open = false">
       <div class="sn-help-modal" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
         <div class="sn-help-header">

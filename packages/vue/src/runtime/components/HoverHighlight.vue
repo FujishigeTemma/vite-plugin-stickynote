@@ -46,7 +46,7 @@ const visible = computed(() => props.info !== null);
   top: anchor(top);
   width: anchor-size(width);
   height: anchor-size(height);
-  background-color: var(--sn-accent-bg);
+  background-color: var(--sn-hover-bg);
   border: 2px solid var(--sn-accent);
   border-radius: 2px;
   box-sizing: border-box;
