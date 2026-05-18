@@ -1,0 +1,71 @@
+name: Publish @vite-plugin-stickynote/vue
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/vue/**"
+      - ".github/workflows/publish.yml"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for npm provenance
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          registry-url: "https://registry.npmjs.org"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Resolve publish action
+        id: check
+        run: |
+          set -euo pipefail
+          LOCAL=$(node -p "require('./packages/vue/package.json').version")
+          LATEST=$(npm view @vite-plugin-stickynote/vue version 2>/dev/null || true)
+          echo "local=$LOCAL latest=${LATEST:-<none>}"
+          if [ -z "$LATEST" ]; then
+            echo "No published version yet — the first release must be published manually."
+            exit 0
+          fi
+          if [ "$LOCAL" = "$LATEST" ]; then
+            echo "Version $LOCAL already published; nothing to do."
+            exit 0
+          fi
+          HIGHEST=$(npx --yes semver "$LOCAL" "$LATEST" | tail -n 1)
+          if [ "$HIGHEST" != "$LOCAL" ]; then
+            echo "Local $LOCAL is not newer than published $LATEST; skipping."
+            exit 0
+          fi
+          if [[ "$LOCAL" == *-* ]]; then
+            TAG=$(echo "$LOCAL" | sed -E 's/.*-([a-zA-Z]+).*/\1/')
+          else
+            TAG=latest
+          fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$LOCAL" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to npm (OIDC / Trusted Publisher)
+        if: steps.check.outputs.publish == 'true'
+        run: |
+          pnpm --filter @vite-plugin-stickynote/vue publish \
+            --access public \
+            --no-git-checks \
+            --tag "${{ steps.check.outputs.tag }}" \
+            --provenance
+
+      - name: Summary
+        if: steps.check.outputs.publish == 'true'
+        run: |
+          echo "Published @vite-plugin-stickynote/vue@${{ steps.check.outputs.version }} (tag: ${{ steps.check.outputs.tag }})" >> "$GITHUB_STEP_SUMMARY"
