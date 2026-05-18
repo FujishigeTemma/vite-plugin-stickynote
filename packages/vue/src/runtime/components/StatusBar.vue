@@ -34,10 +34,11 @@ const shortCommit = computed(() => options.value?.commitHash.slice(0, 7) ?? "");
   align-items: center;
   line-height: 1;
   padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: var(--sn-surface-glass);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--sn-border);
   border-radius: 9999px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--sn-shadow-md);
   pointer-events: auto;
 }
 .sn-statusbar button {
@@ -50,15 +51,15 @@ const shortCommit = computed(() => options.value?.commitHash.slice(0, 7) ?? "");
   cursor: pointer;
 }
 .sn-statusbar button:hover {
-  background: #f3f4f6;
+  background: var(--sn-surface-raised);
 }
 .sn-statusbar button.sn-active {
-  background: #ede9fe;
-  color: #5b21b6;
+  background: var(--sn-accent-bg);
+  color: var(--sn-accent-text);
 }
 .sn-commit {
   font-family: ui-monospace, monospace;
-  color: #6b7280;
+  color: var(--sn-text-muted);
   font-size: 11px;
 }
 </style>

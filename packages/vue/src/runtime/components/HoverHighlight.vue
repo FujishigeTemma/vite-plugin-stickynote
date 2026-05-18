@@ -46,8 +46,8 @@ const visible = computed(() => props.info !== null);
   top: anchor(top);
   width: anchor-size(width);
   height: anchor-size(height);
-  background-color: rgba(139, 92, 246, 0.08);
-  border: 2px solid #8b5cf6;
+  background-color: var(--sn-accent-bg);
+  border: 2px solid var(--sn-accent);
   border-radius: 2px;
   box-sizing: border-box;
   pointer-events: none;
@@ -74,9 +74,9 @@ const visible = computed(() => props.info !== null);
   line-height: 1;
   padding: 4px 8px;
   border-radius: 4px;
-  color: #fff;
-  background-color: #1f2937;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  color: var(--sn-tooltip-fg);
+  background-color: var(--sn-tooltip-bg);
+  box-shadow: var(--sn-shadow-sm);
 }
 @position-try --sn-hover-card-below {
   bottom: auto;
@@ -85,10 +85,10 @@ const visible = computed(() => props.info !== null);
   margin-top: 4px;
 }
 .sn-hover-name {
-  color: #c4b5fd;
+  color: var(--sn-tooltip-name);
 }
 .sn-hover-link {
-  color: #93c5fd;
+  color: var(--sn-tooltip-link);
   text-decoration: underline;
 }
 </style>

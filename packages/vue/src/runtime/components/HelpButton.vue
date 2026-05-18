@@ -68,7 +68,7 @@ useEventListener(
 <style scoped>
 .sn-help-btn {
   font: inherit;
-  color: #6b7280;
+  color: var(--sn-text-muted);
   border: none;
   background: transparent;
   width: 20px;
@@ -82,27 +82,27 @@ useEventListener(
   cursor: pointer;
 }
 .sn-help-btn:hover {
-  background: #f3f4f6;
+  background: var(--sn-surface-raised);
 }
 .sn-help-btn.sn-active {
-  background: #ede9fe;
-  color: #5b21b6;
+  background: var(--sn-accent-bg);
+  color: var(--sn-accent-text);
 }
 
 .sn-help-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--sn-scrim);
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: auto;
 }
 .sn-help-modal {
-  background: white;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: var(--sn-surface);
+  border: 1px solid var(--sn-border);
   border-radius: 10px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--sn-shadow-lg);
   width: min(360px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
   overflow: auto;
@@ -118,13 +118,13 @@ useEventListener(
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: var(--sn-text);
 }
 .sn-help-close {
   font: inherit;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: var(--sn-text-muted);
   cursor: pointer;
   font-size: 18px;
   line-height: 1;
@@ -132,8 +132,8 @@ useEventListener(
   border-radius: 6px;
 }
 .sn-help-close:hover {
-  background: #f3f4f6;
-  color: #111827;
+  background: var(--sn-surface-raised);
+  color: var(--sn-text);
 }
 .sn-help-list {
   display: grid;
@@ -151,21 +151,21 @@ useEventListener(
   margin: 0;
   display: flex;
   align-items: center;
-  color: #374151;
+  color: var(--sn-text);
 }
 .sn-help-list kbd {
   font-family: ui-monospace, monospace;
   font-size: 11px;
-  color: #374151;
-  background: #f9fafb;
-  border: 1px solid #d1d5db;
+  color: var(--sn-text);
+  background: var(--sn-surface-raised);
+  border: 1px solid var(--sn-border-strong);
   border-bottom-width: 2px;
   border-radius: 4px;
   padding: 1px 6px;
   line-height: 1.4;
 }
 .sn-help-plus {
-  color: #9ca3af;
+  color: var(--sn-text-subtle);
   font-size: 11px;
 }
 </style>

@@ -105,25 +105,25 @@ function toggleResolved(): void {
 .sn-detail-back {
   background: transparent;
   border: none;
-  color: #6b7280;
+  color: var(--sn-text-muted);
   font: inherit;
   cursor: pointer;
   padding: 0;
   text-align: left;
 }
 .sn-detail-back:hover {
-  color: #111827;
+  color: var(--sn-text);
 }
 .sn-detail-meta {
   font-size: 11px;
-  color: #6b7280;
+  color: var(--sn-text-muted);
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
   align-items: center;
 }
 .sn-detail-meta a {
-  color: #3b82f6;
+  color: var(--sn-link);
 }
 .sn-comments {
   display: flex;
@@ -138,7 +138,7 @@ function toggleResolved(): void {
   flex-direction: column;
   gap: 2px;
   font-size: 11px;
-  color: #6b7280;
+  color: var(--sn-text-muted);
 }
 .sn-detail-linked li {
   display: flex;
@@ -146,6 +146,6 @@ function toggleResolved(): void {
   align-items: center;
 }
 .sn-detail-linked a {
-  color: #3b82f6;
+  color: var(--sn-link);
 }
 </style>

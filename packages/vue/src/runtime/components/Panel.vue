@@ -39,9 +39,9 @@ function toggleShowResolved(): void {
   width: 360px;
   max-width: 90vw;
   height: 100vh;
-  background: white;
-  border-left: 1px solid #e5e7eb;
-  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.08);
+  background: var(--sn-surface);
+  border-left: 1px solid var(--sn-border);
+  box-shadow: var(--sn-shadow-lg);
   pointer-events: auto;
   display: flex;
   flex-direction: column;
@@ -49,7 +49,7 @@ function toggleShowResolved(): void {
 }
 .sn-panel-header {
   padding: 12px 16px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--sn-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -65,21 +65,21 @@ function toggleShowResolved(): void {
   align-items: center;
 }
 .sn-panel-actions button {
-  border: 1px solid #e5e7eb;
-  background: white;
-  color: #374151;
+  border: 1px solid var(--sn-border);
+  background: var(--sn-surface);
+  color: var(--sn-text);
   padding: 4px 8px;
   border-radius: 6px;
   font: inherit;
   cursor: pointer;
 }
 .sn-panel-actions button:hover {
-  background: #f9fafb;
+  background: var(--sn-surface-raised);
 }
 .sn-panel-actions button.sn-active {
-  background: #ede9fe;
-  border-color: #c4b5fd;
-  color: #5b21b6;
+  background: var(--sn-accent-bg);
+  border-color: var(--sn-accent-border);
+  color: var(--sn-accent-text);
 }
 .sn-panel-body {
   flex: 1;
