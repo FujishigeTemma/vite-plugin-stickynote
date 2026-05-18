@@ -26,7 +26,9 @@ export function mount(opts: OverlayOptions): { unmount: () => void } {
   host.style.cssText = "all:revert;";
   document.body.appendChild(host);
 
-  initAPIClient(opts.apiUrl, () => opts.devBearer);
+  // Deployed builds register a Clerk JWT via setAuthSource(); devBearer is
+  // the local-dev fallback used when no source is registered.
+  initAPIClient(opts.apiUrl, opts.devBearer);
   options.value = opts;
 
   const app = createApp(App);

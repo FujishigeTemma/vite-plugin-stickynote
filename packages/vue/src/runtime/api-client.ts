@@ -1,15 +1,16 @@
 import { hc } from "hono/client";
 import type { AppType } from "@vite-plugin-stickynote/worker/app-type";
+import { getAuthSource } from "./auth-source.ts";
 
 export type Client = ReturnType<typeof hc<AppType>>;
-export type AuthSource = () => string | Promise<string | null> | null;
 
 let client: Client | null = null;
 
-export function initAPIClient(baseUrl: string, getToken: AuthSource): void {
+export function initAPIClient(baseUrl: string, devBearer: string | null): void {
   client = hc<AppType>(baseUrl, {
     headers: async (): Promise<Record<string, string>> => {
-      const token = await Promise.resolve(getToken());
+      const source = getAuthSource();
+      const token = source ? await Promise.resolve(source()) : devBearer;
       return token ? { Authorization: `Bearer ${token}` } : {};
     },
   });
