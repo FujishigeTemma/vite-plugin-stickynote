@@ -2,6 +2,7 @@
 import { computed } from "vue";
 
 import { options, panelOpen, togglePanel } from "../state.ts";
+import HelpButton from "./HelpButton.vue";
 
 const dirtyBadge = computed(() => (options.value?.dirtyBuild ? "local changes" : null));
 const shortCommit = computed(() => options.value?.commitHash.slice(0, 7) ?? "");
@@ -11,6 +12,7 @@ const shortCommit = computed(() => options.value?.commitHash.slice(0, 7) ?? "");
   <div class="sn-statusbar">
     <span v-if="dirtyBadge" class="sn-badge">{{ dirtyBadge }}</span>
     <span class="sn-commit">{{ shortCommit }}</span>
+    <HelpButton />
     <button
       type="button"
       :class="{ 'sn-active': panelOpen }"
