@@ -12,6 +12,11 @@ export type Env = {
   CLERK_ISSUER?: "dev";
   DEV_BEARER?: string;
   DEV_USER_NAME?: string;
+  // Optional comma-separated allowlist of primary email domains (e.g.
+  // "acme.com,acme.co.jp"). When set, Clerk-authenticated requests whose
+  // primary email domain does not match are rejected with 403. Empty or
+  // unset disables the check.
+  ALLOWED_EMAIL_DOMAINS?: string;
 };
 
 export type AuthUser = {

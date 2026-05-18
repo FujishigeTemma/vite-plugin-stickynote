@@ -25,7 +25,28 @@ wrangler secret put CLERK_PUBLISHABLE_KEY   # paste pk_live_... (non-secret but 
 
 You can also set both from the Cloudflare dashboard → your Worker → Settings → Variables and Secrets.
 
-### 2. Lock down ALLOWED_ORIGINS
+### 2. Restrict access by email domain
+
+When you only want a closed set of users (e.g. employees of a single
+organization) to be able to load the overlay, set `ALLOWED_EMAIL_DOMAINS`
+to a comma-separated list of email domains. After Clerk JWT verification
+passes, the Worker fetches the user via the Clerk backend API and allows
+the request if **any** of the user's linked email addresses has a domain
+on the list (not just the primary — users routinely attach a personal
+address as secondary). Unmatched users are rejected with `403
+forbidden_domain`. Leaving the variable unset (the default) disables the
+check entirely. Lookups are cached per `userId` in-isolate for 5 minutes
+so the Clerk API is hit at most once per user per cache window.
+
+```bash
+wrangler secret put ALLOWED_EMAIL_DOMAINS   # e.g. "acme.com,acme.co.jp"
+```
+
+Use `wrangler secret put` rather than committing the list to
+`wrangler.jsonc` — the value isn't strictly confidential, but it leaks
+who you employ if left in a public fork.
+
+### 3. Lock down ALLOWED_ORIGINS
 
 `vars.ALLOWED_ORIGINS` in `wrangler.jsonc` ships with `http://localhost:5173,http://localhost:5174` — fine for local, **wrong for any deployed environment**. Replace it with your real dev origin(s) (comma-separated, full origins, no trailing slash):
 
@@ -37,7 +58,7 @@ You can also set both from the Cloudflare dashboard → your Worker → Settings
 
 Then `wrangler deploy` again. Also add the same origins to Clerk's **Allowed Origins** dashboard setting.
 
-### 3. Wire the URL into the Vite plugin
+### 4. Wire the URL into the Vite plugin
 
 ```ts
 stickynote({
