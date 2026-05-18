@@ -42,8 +42,23 @@ jobs:
             echo "Version $LOCAL already published; nothing to do."
             exit 0
           fi
-          HIGHEST=$(npx --yes semver "$LOCAL" "$LATEST" | tail -n 1)
-          if [ "$HIGHEST" != "$LOCAL" ]; then
+          NEWER=$(node -e '
+            const [a, b] = process.argv.slice(1);
+            const parse = (v) => {
+              const [main, pre = ""] = v.split("-");
+              return [main.split(".").map(Number), pre];
+            };
+            const cmp = (x, y) => {
+              const [xm, xp] = parse(x);
+              const [ym, yp] = parse(y);
+              for (let i = 0; i < 3; i++) if (xm[i] !== ym[i]) return xm[i] - ym[i];
+              if (!xp && yp) return 1;
+              if (xp && !yp) return -1;
+              return xp < yp ? -1 : xp > yp ? 1 : 0;
+            };
+            process.stdout.write(cmp(a, b) > 0 ? "1" : "0");
+          ' "$LOCAL" "$LATEST")
+          if [ "$NEWER" != "1" ]; then
             echo "Local $LOCAL is not newer than published $LATEST; skipping."
             exit 0
           fi
