@@ -19,16 +19,21 @@ export function inspectorTransform(root: string): Plugin {
   return {
     name: "stickynote:inspector-transform",
     enforce: "pre",
-    apply(_, { command }) {
-      return command === "serve" && process.env.NODE_ENV !== "test";
+    apply(_, { mode }) {
+      return mode !== "production" && process.env.NODE_ENV !== "test";
     },
     transform(code, id) {
       const [filename, rawQuery] = id.split("?", 2);
       if (!filename || !filename.endsWith(".vue")) return null;
+      // Skip third-party SFCs — inspector paths would point at non-existent
+      // entries in the consumer's repo tree.
+      if (filename.includes("/node_modules/")) return null;
       const query = new URLSearchParams(rawQuery ?? "");
-      // Skip <style> blocks and `?raw` requests — only the template body needs
-      // the attribute injection.
-      if (query.get("type") === "style") return null;
+      // Only the main .vue request carries the template to instrument. Skip
+      // every SFC sub-request (`?vue&type=script|style|template|custom`) and
+      // `?raw` — under Rolldown the script sub-request lands here too, so
+      // matching on absence of the `vue` flag is the safe filter.
+      if (query.has("vue")) return null;
       if (query.has("raw")) return null;
 
       const s = new MagicString(code);

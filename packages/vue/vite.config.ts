@@ -5,7 +5,7 @@ export default defineConfig({
   // ships as source and is loaded into the consumer via virtual modules so
   // `<style scoped>` is compiled by the consumer's @vitejs/plugin-vue.
   pack: {
-    entry: ["src/index.ts"],
+    entry: ["src/index.ts", "src/client.ts"],
     format: ["esm"],
     dts: true,
     platform: "node",

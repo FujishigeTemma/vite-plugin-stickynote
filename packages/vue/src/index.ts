@@ -32,7 +32,11 @@ function overlayPlugin(
 ): Plugin {
   return {
     name: "@vite-plugin-stickynote/vue",
-    apply: "serve",
+    // Self-skip only Vite's default production build (`vite build` with no
+    // `--mode`). Any other mode label is the consumer's territory — they
+    // compose conditionally in `vite.config.ts`, e.g.
+    // `mode !== "prod" && stickynote(...)`.
+    apply: (_, { mode }) => mode !== "production",
     resolveId(id) {
       if (id === VIRTUAL_MOUNT) return id;
       if (id.startsWith(VIRTUAL_PATH_PREFIX)) {
@@ -69,14 +73,32 @@ function overlayPlugin(
       }
       return null;
     },
-    transformIndexHtml() {
-      return [
-        {
-          tag: "script",
-          attrs: { type: "module", src: `/@id/${VIRTUAL_MOUNT}` },
-          injectTo: "body",
-        },
-      ];
+    transformIndexHtml: {
+      // `pre` runs before Vite's own HTML build plugin, which scans inline
+      // module-scripts and bundles their content via `html-proxy`. That scan
+      // resolves the bare `import "virtual:..."` through this plugin's
+      // `resolveId`/`load` and emits a real chunk. Post-ordered hooks miss
+      // the scan and would leak the literal `virtual:` string into output.
+      order: "pre",
+      handler(_, ctx) {
+        if (ctx.server) {
+          return [
+            {
+              tag: "script",
+              attrs: { type: "module", src: `/@id/${VIRTUAL_MOUNT}` },
+              injectTo: "body",
+            },
+          ];
+        }
+        return [
+          {
+            tag: "script",
+            attrs: { type: "module" },
+            children: `import "${VIRTUAL_MOUNT}";`,
+            injectTo: "body",
+          },
+        ];
+      },
     },
   };
 }
