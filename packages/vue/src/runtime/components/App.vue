@@ -9,6 +9,7 @@ import Panel from "./Panel.vue";
 import PinLayer from "./PinLayer.vue";
 import StalePinTray from "./StalePinTray.vue";
 import StatusBar from "./StatusBar.vue";
+import "./tokens.css";
 
 useRouteTracker();
 useDomTracker();
@@ -62,7 +63,6 @@ z-indices; do not add more global z-indices elsewhere in the plugin. */
     system-ui,
     -apple-system,
     sans-serif;
-  color: #111827;
   font-size: 13px;
   line-height: 1.4;
 }
@@ -93,23 +93,23 @@ prevents collision with host-page CSS. -->
   margin-top: -28px;
   border: 2px solid transparent;
   border-radius: 14px 14px 14px 0;
-  background: #f59e0b;
-  color: white;
+  background: var(--sn-pin);
+  color: var(--sn-on-accent);
   font-weight: 700;
   font-size: 11px;
   cursor: pointer;
   pointer-events: auto;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--sn-shadow-md);
   display: flex;
   align-items: center;
   justify-content: center;
   touch-action: none;
 }
 .sn-pin.sn-pin-resolved {
-  background: #10b981;
+  background: var(--sn-pin-resolved);
 }
 .sn-pin.sn-pin-stale {
-  background: #6b7280;
+  background: var(--sn-pin-stale);
   opacity: 0.6;
 }
 .sn-pin.sn-pin-draggable {
@@ -124,12 +124,12 @@ prevents collision with host-page CSS. -->
   transform: scale(1.2);
 }
 .sn-pin.sn-pin-open {
-  border-color: #fff;
+  border-color: var(--sn-pin-open-border);
 }
 
 .sn-badge {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--sn-warning-bg);
+  color: var(--sn-warning-text);
   padding: 2px 6px;
   border-radius: 9999px;
   font-size: 11px;
@@ -141,12 +141,17 @@ prevents collision with host-page CSS. -->
 }
 .sn-form textarea {
   font: inherit;
-  border: 1px solid #d1d5db;
+  background: var(--sn-input-bg);
+  color: var(--sn-input-text);
+  border: 1px solid var(--sn-input-border);
   border-radius: 6px;
   padding: 8px 10px;
   resize: vertical;
   min-height: 70px;
   width: 100%;
+}
+.sn-form textarea::placeholder {
+  color: var(--sn-input-placeholder);
 }
 .sn-form-actions {
   display: flex;
@@ -155,21 +160,28 @@ prevents collision with host-page CSS. -->
 }
 .sn-form-actions button {
   font: inherit;
-  border: 1px solid #d1d5db;
-  background: white;
-  color: #374151;
+  border: 1px solid var(--sn-border);
+  background: var(--sn-surface);
+  color: var(--sn-text);
   padding: 6px 12px;
   border-radius: 6px;
   cursor: pointer;
 }
+.sn-form-actions button:hover {
+  background: var(--sn-surface-raised);
+}
 .sn-form-actions button.sn-primary {
-  background: #8b5cf6;
-  color: white;
-  border-color: #8b5cf6;
+  background: var(--sn-accent);
+  color: var(--sn-on-accent);
+  border-color: var(--sn-accent);
+}
+.sn-form-actions button.sn-primary:hover {
+  background: var(--sn-accent-hover);
+  border-color: var(--sn-accent-hover);
 }
 .sn-form-actions button.sn-primary:disabled {
-  background: #c4b5fd;
-  border-color: #c4b5fd;
+  background: var(--sn-accent-disabled);
+  border-color: var(--sn-accent-disabled);
   cursor: not-allowed;
 }
 </style>

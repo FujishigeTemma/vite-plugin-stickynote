@@ -383,10 +383,10 @@ onScopeDispose(() => {
 <style scoped>
 .sn-composer-overlay {
   position: fixed;
-  background: white;
-  border: 1px solid #e5e7eb;
+  background: var(--sn-surface);
+  border: 1px solid var(--sn-border);
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--sn-shadow-lg);
   padding: 12px;
   width: 320px;
   pointer-events: auto;
@@ -404,7 +404,7 @@ onScopeDispose(() => {
 }
 .sn-composer-primary {
   font-size: 11px;
-  color: #374151;
+  color: var(--sn-text);
   font-family: ui-monospace, monospace;
 }
 .sn-composer-additional {
@@ -416,13 +416,13 @@ onScopeDispose(() => {
   display: flex;
   align-items: center;
   gap: 4px;
-  background: #ede9fe;
-  border: 1px solid #c4b5fd;
+  background: var(--sn-accent-bg);
+  border: 1px solid var(--sn-accent-border);
   border-radius: 4px;
   padding: 2px 4px 2px 6px;
   font-family: ui-monospace, monospace;
   font-size: 10px;
-  color: #4c1d95;
+  color: var(--sn-accent-text);
 }
 .sn-chip-text {
   flex: 1;
@@ -433,7 +433,7 @@ onScopeDispose(() => {
 .sn-chip-remove {
   background: transparent;
   border: 0;
-  color: #6d28d9;
+  color: var(--sn-accent-text);
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
@@ -441,6 +441,6 @@ onScopeDispose(() => {
 }
 .sn-composer-hint {
   font-size: 10px;
-  color: #9ca3af;
+  color: var(--sn-text-subtle);
 }
 </style>

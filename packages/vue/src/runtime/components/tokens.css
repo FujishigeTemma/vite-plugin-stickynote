@@ -1,0 +1,93 @@
+/*
+ * Plugin UI color tokens.
+ *
+ * Layering: Semantic-only tokens (no separate primitive layer in CSS — values
+ * are inlined OKLCH literals at the semantic level since this plugin ships a
+ * single theme). Components reference `var(--sn-*)` exclusively; no hex /
+ * rgb / hsl is allowed in component SFCs.
+ *
+ * Mode: `light-dark()` switches values based on `color-scheme`, which is set
+ * to `light dark` on `.sn-root`. The plugin follows OS `prefers-color-scheme`
+ * regardless of the host site's theme (standard devtools-overlay behavior).
+ *
+ * Brand: Teal-Cyan (hue ~205) for chrome; Emerald (hue ~160) for resolved
+ * state — 45° hue separation keeps "selected" and "resolved" visually
+ * unambiguous. Amber pins are intentionally warm against the cool chrome.
+ *
+ * Accessibility target: WCAG 2.2 AA (text 4.5:1, UI 3:1) in both modes.
+ */
+.sn-root {
+  color-scheme: light dark;
+
+  /* ---- Surface ---- */
+  --sn-surface: light-dark(oklch(99% 0.003 250), oklch(22% 0.012 250));
+  --sn-surface-raised: light-dark(oklch(96% 0.005 250), oklch(28% 0.012 250));
+  --sn-surface-glass: light-dark(oklch(99% 0.003 250 / 0.94), oklch(22% 0.012 250 / 0.9));
+  --sn-border: light-dark(oklch(88% 0.01 250), oklch(38% 0.015 250));
+  --sn-border-strong: light-dark(oklch(78% 0.015 250), oklch(50% 0.02 250));
+
+  /* ---- Text ---- */
+  --sn-text: light-dark(oklch(20% 0.015 250), oklch(96% 0.005 250));
+  --sn-text-muted: light-dark(oklch(45% 0.018 250), oklch(72% 0.01 250));
+  --sn-text-subtle: light-dark(oklch(60% 0.015 250), oklch(58% 0.01 250));
+
+  /* ---- Input (form / textarea) ---- */
+  --sn-input-bg: light-dark(oklch(100% 0 0), oklch(18% 0.012 250));
+  --sn-input-border: light-dark(oklch(82% 0.012 250), oklch(42% 0.015 250));
+  --sn-input-text: var(--sn-text);
+  --sn-input-placeholder: var(--sn-text-subtle);
+
+  /* ---- Brand accent (Teal-Cyan, hue 205) ---- */
+  --sn-accent: light-dark(oklch(58% 0.12 205), oklch(70% 0.13 205));
+  --sn-accent-hover: light-dark(oklch(50% 0.13 205), oklch(76% 0.12 205));
+  --sn-accent-bg: light-dark(oklch(96% 0.025 205), oklch(30% 0.055 205));
+  --sn-accent-border: light-dark(oklch(82% 0.075 205), oklch(48% 0.09 205));
+  --sn-accent-text: light-dark(oklch(38% 0.1 205), oklch(88% 0.08 205));
+  --sn-accent-disabled: light-dark(oklch(82% 0.055 205), oklch(45% 0.06 205));
+  --sn-on-accent: oklch(100% 0 0);
+  --sn-focus-ring: var(--sn-accent);
+
+  /* ---- Pin ---- */
+  --sn-pin: oklch(75% 0.16 75); /* amber, identity */
+  --sn-pin-resolved: light-dark(oklch(65% 0.15 160), oklch(70% 0.15 160)); /* emerald */
+  --sn-pin-stale: light-dark(oklch(60% 0.015 250), oklch(55% 0.012 250));
+  --sn-pin-open-border: oklch(100% 0 0);
+
+  /* ---- Warning badge (amber tint) ---- */
+  --sn-warning-bg: light-dark(oklch(96% 0.04 75), oklch(34% 0.07 75));
+  --sn-warning-text: light-dark(oklch(45% 0.13 75), oklch(88% 0.08 75));
+
+  /* ---- Selection (coral, hue 30) ---- */
+  --sn-selection-border: oklch(67% 0.18 30);
+  --sn-selection-bg: oklch(67% 0.18 30 / 0.08);
+  --sn-selection-label-bg: oklch(58% 0.18 30);
+  --sn-selection-label-fg: oklch(100% 0 0);
+
+  /* ---- Tooltip / popover (intentionally inverted vs surface in BOTH modes
+       to preserve the "dark floating label" affordance) ---- */
+  --sn-tooltip-bg: light-dark(oklch(22% 0.015 250), oklch(94% 0.005 250));
+  --sn-tooltip-fg: light-dark(oklch(98% 0 0), oklch(18% 0.012 250));
+  --sn-tooltip-name: light-dark(oklch(80% 0.13 205), oklch(50% 0.13 205));
+  --sn-tooltip-link: light-dark(oklch(78% 0.13 240), oklch(45% 0.15 240));
+
+  /* ---- States ---- */
+  --sn-danger: light-dark(oklch(60% 0.2 15), oklch(72% 0.18 15));
+  --sn-link: light-dark(oklch(58% 0.15 240), oklch(78% 0.13 240));
+
+  /* ---- Modal scrim (always-dark, both modes) ---- */
+  --sn-scrim: oklch(0% 0 0 / 0.4);
+
+  /* ---- Shadows (deeper / more diffuse in dark mode for visibility) ---- */
+  --sn-shadow-sm: light-dark(0 1px 3px oklch(0% 0 0 / 0.12), 0 1px 4px oklch(0% 0 0 / 0.45));
+  --sn-shadow-md: light-dark(0 4px 12px oklch(0% 0 0 / 0.1), 0 4px 16px oklch(0% 0 0 / 0.5));
+  --sn-shadow-lg: light-dark(0 4px 20px oklch(0% 0 0 / 0.14), 0 8px 28px oklch(0% 0 0 / 0.55));
+
+  /* Apply baseline text color so all descendants inherit unless overridden. */
+  color: var(--sn-text);
+}
+
+/* ---- Focus ring (project-wide) ---- */
+.sn-root :focus-visible {
+  outline: 2px solid var(--sn-focus-ring);
+  outline-offset: 2px;
+}

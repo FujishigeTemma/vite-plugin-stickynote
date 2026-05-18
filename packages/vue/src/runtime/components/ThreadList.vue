@@ -106,11 +106,11 @@ async function createPageWide(body: string): Promise<void> {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #6b7280;
+  color: var(--sn-text-muted);
   margin: 8px 0 4px;
 }
 .sn-empty {
-  color: #9ca3af;
+  color: var(--sn-text-subtle);
   font-style: italic;
   padding: 8px 0;
 }
@@ -120,38 +120,38 @@ async function createPageWide(body: string): Promise<void> {
   gap: 6px;
 }
 .sn-thread-card {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--sn-border);
   border-radius: 8px;
   padding: 10px 12px;
-  background: white;
+  background: var(--sn-surface);
   cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 .sn-thread-card:hover {
-  border-color: #c4b5fd;
+  border-color: var(--sn-accent-border);
 }
 .sn-thread-card.sn-active-thread {
-  border-color: #8b5cf6;
-  box-shadow: 0 0 0 2px #ede9fe;
+  border-color: var(--sn-accent);
+  box-shadow: 0 0 0 2px var(--sn-accent-bg);
 }
 .sn-thread-card.sn-thread-stale {
-  background: #f9fafb;
+  background: var(--sn-surface-raised);
 }
 .sn-thread-meta {
   display: flex;
   gap: 6px;
   align-items: center;
   font-size: 11px;
-  color: #6b7280;
+  color: var(--sn-text-muted);
 }
 .sn-thread-meta .sn-comp {
   font-family: ui-monospace, monospace;
-  color: #374151;
+  color: var(--sn-text);
 }
 .sn-thread-body {
-  color: #111827;
+  color: var(--sn-text);
   white-space: pre-wrap;
   word-wrap: break-word;
 }

@@ -61,12 +61,12 @@ function onDelete(): void {
 
 <style scoped>
 .sn-comment {
-  border: 1px solid #f3f4f6;
+  border: 1px solid var(--sn-border);
   border-radius: 6px;
   padding: 8px 10px;
 }
 .sn-comment.sn-deleted {
-  color: #9ca3af;
+  color: var(--sn-text-subtle);
   font-style: italic;
 }
 .sn-comment-head {
@@ -74,12 +74,12 @@ function onDelete(): void {
   justify-content: space-between;
   align-items: center;
   font-size: 11px;
-  color: #6b7280;
+  color: var(--sn-text-muted);
   margin-bottom: 4px;
 }
 .sn-comment-author {
   font-weight: 600;
-  color: #111827;
+  color: var(--sn-text);
 }
 .sn-comment-actions {
   display: flex;
@@ -88,12 +88,12 @@ function onDelete(): void {
 .sn-comment-actions button {
   background: transparent;
   border: none;
-  color: #6b7280;
+  color: var(--sn-text-muted);
   font: inherit;
   cursor: pointer;
   padding: 0;
 }
 .sn-comment-actions button:hover {
-  color: #ef4444;
+  color: var(--sn-danger);
 }
 </style>
