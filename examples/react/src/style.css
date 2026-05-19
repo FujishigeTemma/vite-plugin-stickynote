@@ -1,0 +1,108 @@
+:root {
+  /* Teal-Cyan brand (hue 205) aligned with the plugin UI palette, but kept
+     under a separate token namespace so the demo site and plugin stay
+     decoupled. All colors are OKLCH for perceptual uniformity. */
+  --text: oklch(45% 0.018 250);
+  --text-h: oklch(20% 0.015 250);
+  --bg: oklch(99% 0.003 250);
+  --border: oklch(90% 0.008 250);
+  --code-bg: oklch(96% 0.008 80);
+  --accent: oklch(55% 0.13 205);
+  --accent-bg: oklch(55% 0.13 205 / 0.1);
+  --accent-border: oklch(55% 0.13 205 / 0.45);
+
+  --sans: system-ui, "Segoe UI", Roboto, sans-serif;
+  --heading: system-ui, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, Consolas, monospace;
+
+  font: 18px/145% var(--sans);
+  letter-spacing: 0.18px;
+  color-scheme: light dark;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  @media (max-width: 1024px) {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: oklch(72% 0.01 250);
+    --text-h: oklch(96% 0.005 250);
+    --bg: oklch(18% 0.012 250);
+    --border: oklch(34% 0.013 250);
+    --code-bg: oklch(24% 0.012 250);
+    --accent: oklch(72% 0.13 205);
+    --accent-bg: oklch(72% 0.13 205 / 0.15);
+    --accent-border: oklch(72% 0.13 205 / 0.5);
+  }
+}
+
+body {
+  margin: 0;
+}
+
+h1,
+h2 {
+  font-family: var(--heading);
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+h1 {
+  font-size: 56px;
+  letter-spacing: -1.68px;
+  margin: 32px 0;
+  @media (max-width: 1024px) {
+    font-size: 36px;
+    margin: 20px 0;
+  }
+}
+h2 {
+  font-size: 24px;
+  line-height: 118%;
+  letter-spacing: -0.24px;
+  margin: 0 0 8px;
+  @media (max-width: 1024px) {
+    font-size: 20px;
+  }
+}
+p {
+  margin: 0;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 15px;
+  line-height: 135%;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--text-h);
+  background: var(--code-bg);
+}
+
+.app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+.nav {
+  display: flex;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+.nav-link {
+  color: var(--text);
+  text-decoration: none;
+}
+.nav-link:hover,
+.nav-link.active {
+  color: var(--accent);
+}
