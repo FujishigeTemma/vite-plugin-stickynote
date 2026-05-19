@@ -14,6 +14,11 @@ export const showResolved = ref(false);
 export const openThreadId = ref<string | null>(null);
 export const currentRoute = ref<string>(window.location.pathname);
 
+// True once we've decided no host vue-router is reachable. Surfaced in the
+// status bar so a misconfigured host doesn't silently save threads under
+// stale or initial-pathname routes.
+export const noRouter = ref(false);
+
 // Bumped by dom-tracker when the host DOM gains or loses an inspector-tagged
 // element. Sole trigger for re-resolving (path, line, index) → live element
 // bindings; position follow-through is handled by CSS Anchor Positioning.

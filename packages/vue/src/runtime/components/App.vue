@@ -134,6 +134,10 @@ prevents collision with host-page CSS. -->
   border-radius: 9999px;
   font-size: 11px;
 }
+.sn-badge.sn-badge-danger {
+  background: var(--sn-danger);
+  color: oklch(99% 0 0);
+}
 .sn-form {
   display: flex;
   flex-direction: column;

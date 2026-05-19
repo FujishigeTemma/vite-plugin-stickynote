@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import { options, panelOpen, togglePanel } from "../state.ts";
+import { noRouter, options, panelOpen, togglePanel } from "../state.ts";
 import HelpButton from "./HelpButton.vue";
 
 const dirtyBadge = computed(() => (options.value?.dirtyBuild ? "local changes" : null));
@@ -10,6 +10,13 @@ const shortCommit = computed(() => options.value?.commitHash.slice(0, 7) ?? "");
 
 <template>
   <div class="sn-statusbar">
+    <span
+      v-if="noRouter"
+      class="sn-badge sn-badge-danger"
+      title="vue-router not detected — threads will save under stale routes. Install vue-router on the host app."
+    >
+      no router
+    </span>
     <span v-if="dirtyBadge" class="sn-badge">{{ dirtyBadge }}</span>
     <span class="sn-commit">{{ shortCommit }}</span>
     <HelpButton />

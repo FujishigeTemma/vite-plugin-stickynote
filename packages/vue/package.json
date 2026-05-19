@@ -1,6 +1,6 @@
 {
   "name": "@vite-plugin-stickynote/vue",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "In-app comment overlay for Vue dev environments — pin coordinates, threads, and replies, persisted via a Cloudflare Worker + D1.",
   "keywords": [
     "annotation",

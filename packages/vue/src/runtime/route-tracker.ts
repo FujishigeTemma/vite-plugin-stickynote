@@ -1,10 +1,13 @@
-import { useEventListener } from "@vueuse/core";
 import { onScopeDispose, watch } from "vue";
 
 import { hostRouter } from "./host-router.ts";
-import { currentRoute } from "./state.ts";
+import { currentRoute, noRouter } from "./state.ts";
 
 type RouteSnap = { fullPath: string; matched: { path: string }[] };
+
+// Defer the "no router" verdict a tick so an `app:init` that races the
+// overlay mount still has a chance to populate `hostRouter` first.
+const NO_ROUTER_GRACE_MS = 500;
 
 export function useRouteTracker(): void {
   currentRoute.value = pickPath(window.location.pathname);
@@ -21,20 +24,19 @@ export function useRouteTracker(): void {
       unregister?.();
       unregister = null;
       if (!router) return;
+      noRouter.value = false;
       apply(router.currentRoute.value);
       unregister = router.afterEach((to) => apply(to));
     },
     { immediate: true },
   );
 
-  // Fallback for no-router hosts. pushState navigations aren't covered,
-  // but there's no meaningful route pattern to mirror in that case.
-  useEventListener(window, "popstate", () => {
-    if (unregister) return;
-    currentRoute.value = pickPath(window.location.pathname);
-  });
+  const verdict = window.setTimeout(() => {
+    if (!hostRouter.value) noRouter.value = true;
+  }, NO_ROUTER_GRACE_MS);
 
   onScopeDispose(() => {
+    window.clearTimeout(verdict);
     stopWatch();
     unregister?.();
   });
