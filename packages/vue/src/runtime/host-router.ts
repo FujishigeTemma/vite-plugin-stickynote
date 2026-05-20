@@ -90,11 +90,18 @@ export function installHostRouterHook(): void {
 
 function createHook(): DevtoolsHook {
   const events = new Map<string, Listener[]>();
-  // `id` + `devtoolsVersion` mark this as v7 so a later `@vue/devtools`
-  // install doesn't take its legacy-hook compat path and `Object.assign`
-  // over our `events` map.
+  // `id: "vue-devtools-next"` is the sentinel @vue/devtools-kit checks before
+  // it Object.assigns its own hook over an existing one (search its
+  // `initDevTools` for `isDevToolsNext`). Without this, a later `app.use(VueDevTools)`
+  // — common in hosts that bundle vue-plugin-vue-devtools — wipes our
+  // `events` map and our `app:init` listener with it, freezing `hostRouter`
+  // at null forever. Trade-off: if our overlay loads before the browser
+  // extension's content script (rare; the extension runs at document_start),
+  // the extension's UI can't bind to this app until the user reloads. The
+  // pre-existing `existing` branch above handles the normal extension-first
+  // order without spoofing.
   return {
-    id: "vite-plugin-stickynote",
+    id: "vue-devtools-next",
     devtoolsVersion: "7.0",
     enabled: true,
     events,
