@@ -9,40 +9,48 @@ import {
   UpdateThreadPositionSchema,
   UpdateThreadStatusSchema,
 } from "../schemas.ts";
-import type { CommentRow, Component, ComponentRow, Env, ThreadRow, Variables } from "../types.ts";
-
-const THREAD_SELECT = `SELECT t.*, (
-  SELECT body FROM comments
-  WHERE thread_id = t.id
-  ORDER BY created_at ASC
-  LIMIT 1
-) AS first_comment_body FROM threads t`;
+import type {
+  Comment,
+  CommentRow,
+  Component,
+  ComponentRow,
+  Env,
+  ThreadRow,
+  Variables,
+} from "../types.ts";
 
 // SQLite has no JSON type, so json_group_array returns a TEXT string — D1
-// can't auto-parse it. Instead, fetch components in a second query and group
-// in JS; the response then carries `components: Component[]` natively and
-// Hono RPC infers the shape end-to-end.
+// can't auto-parse it. Instead, fetch relations in second queries and group
+// in JS; the response then carries `components: Component[]` and
+// `first_comment: Comment` natively, so Hono RPC infers the shape end-to-end.
 
 // D1's bound-parameter ceiling is ~100; chunk lookups so a large list query
 // can't trip it once the dataset grows.
 const IN_CHUNK = 90;
 
-function attachComponents(threads: ThreadRow[], components: ComponentRow[]) {
-  const byThread = new Map<string, Component[]>();
+function stripThreadId<T extends { thread_id: string }>(row: T): Omit<T, "thread_id"> {
+  const { thread_id: _, ...rest } = row;
+  return rest;
+}
+
+function hydrate(threads: ThreadRow[], components: ComponentRow[], firstComments: CommentRow[]) {
+  const componentsByThread = new Map<string, Component[]>();
   for (const c of components) {
-    const arr = byThread.get(c.thread_id);
-    const entry: Component = {
-      id: c.id,
-      display_order: c.display_order,
-      path: c.path,
-      line: c.line,
-      v_for_index: c.v_for_index,
-      name: c.name,
-    };
+    const arr = componentsByThread.get(c.thread_id);
+    const entry = stripThreadId(c);
     if (arr) arr.push(entry);
-    else byThread.set(c.thread_id, [entry]);
+    else componentsByThread.set(c.thread_id, [entry]);
   }
-  return threads.map((t) => ({ ...t, components: byThread.get(t.id) ?? [] }));
+  const firstCommentByThread = new Map<string, Comment>();
+  for (const c of firstComments) firstCommentByThread.set(c.thread_id, stripThreadId(c));
+  return threads.flatMap((t) => {
+    const first_comment = firstCommentByThread.get(t.id);
+    // Live threads always have a head comment (deleting it cascades the
+    // thread). A missing row means the thread was deleted between the two
+    // queries — drop it from the response rather than ship a half-built row.
+    if (!first_comment) return [];
+    return [{ ...t, components: componentsByThread.get(t.id) ?? [], first_comment }];
+  });
 }
 
 async function loadComponentsFor(env: Env, threadIds: string[]): Promise<ComponentRow[]> {
@@ -61,13 +69,35 @@ async function loadComponentsFor(env: Env, threadIds: string[]): Promise<Compone
   return out;
 }
 
+async function loadFirstCommentsFor(env: Env, threadIds: string[]): Promise<CommentRow[]> {
+  if (threadIds.length === 0) return [];
+  const out: CommentRow[] = [];
+  for (let i = 0; i < threadIds.length; i += IN_CHUNK) {
+    const chunk = threadIds.slice(i, i + IN_CHUNK);
+    const placeholders = chunk.map(() => "?").join(",");
+    const { results } = await env.DB.prepare(
+      `SELECT id, thread_id, body, created_by, created_by_name, created_at, updated_at, deleted_at
+       FROM (
+         SELECT c.*, ROW_NUMBER() OVER (PARTITION BY thread_id ORDER BY created_at ASC, id ASC) AS rn
+         FROM comments c
+         WHERE c.thread_id IN (${placeholders})
+       ) WHERE rn = 1`,
+    )
+      .bind(...chunk)
+      .all<CommentRow>();
+    out.push(...results);
+  }
+  return out;
+}
+
 async function loadHydratedThread(env: Env, threadId: string) {
-  const [thread, components] = await Promise.all([
-    env.DB.prepare(`${THREAD_SELECT} WHERE t.id = ?`).bind(threadId).first<ThreadRow>(),
+  const [thread, components, firstComments] = await Promise.all([
+    env.DB.prepare(`SELECT * FROM threads WHERE id = ?`).bind(threadId).first<ThreadRow>(),
     loadComponentsFor(env, [threadId]),
+    loadFirstCommentsFor(env, [threadId]),
   ]);
   if (!thread) return null;
-  return attachComponents([thread], components)[0] ?? null;
+  return hydrate([thread], components, firstComments)[0] ?? null;
 }
 
 export const threadsRoutes = new Hono<{
@@ -85,15 +115,16 @@ export const threadsRoutes = new Hono<{
     if (includeResolved !== "true") {
       where.push("t.status = 'open'");
     }
-    const sql = `${THREAD_SELECT} ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY t.created_at DESC`;
+    const sql = `SELECT * FROM threads t ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY t.created_at DESC`;
     const { results } = await c.env.DB.prepare(sql)
       .bind(...binds)
       .all<ThreadRow>();
-    const components = await loadComponentsFor(
-      c.env,
-      results.map((t) => t.id),
-    );
-    return c.json({ threads: attachComponents(results, components) });
+    const ids = results.map((t) => t.id);
+    const [components, firstComments] = await Promise.all([
+      loadComponentsFor(c.env, ids),
+      loadFirstCommentsFor(c.env, ids),
+    ]);
+    return c.json({ threads: hydrate(results, components, firstComments) });
   })
   .post("/", vValidator("json", CreateThreadSchema), async (c) => {
     const user = c.get("user");

@@ -37,9 +37,6 @@ export type ThreadRow = {
   created_by_name: string;
   created_at: string;
   updated_at: string;
-  // Non-null because deleting the head comment hard-deletes the thread, so a
-  // live thread always has at least one comment.
-  first_comment_body: string;
 };
 
 export type ComponentRow = {
@@ -52,9 +49,6 @@ export type ComponentRow = {
   name: string;
 };
 
-// Wire shape exposed by routes; thread_id is implicit from the parent thread.
-export type Component = Omit<ComponentRow, "thread_id">;
-
 export type CommentRow = {
   id: string;
   thread_id: string;
@@ -65,3 +59,7 @@ export type CommentRow = {
   updated_at: string;
   deleted_at: string | null;
 };
+
+// Wire shapes exposed by routes; thread_id is implicit from the parent thread.
+export type Component = Omit<ComponentRow, "thread_id">;
+export type Comment = Omit<CommentRow, "thread_id">;

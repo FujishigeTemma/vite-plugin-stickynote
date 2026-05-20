@@ -59,7 +59,7 @@ async function createPageWide(body: string): Promise<void> {
           <span>· {{ t.created_by_name }}</span>
           <span v-if="t.status === 'resolved'">· resolved</span>
         </div>
-        <div class="sn-thread-body">{{ t.first_comment_body }}</div>
+        <div class="sn-thread-body">{{ t.first_comment.body }}</div>
       </div>
       <div v-if="showPageWideForm" class="sn-thread-card">
         <CommentForm
@@ -95,7 +95,7 @@ async function createPageWide(body: string): Promise<void> {
           <span v-if="t.status === 'resolved'">· resolved</span>
           <span v-if="isStale(t)" class="sn-badge">stale</span>
         </div>
-        <div class="sn-thread-body">{{ t.first_comment_body }}</div>
+        <div class="sn-thread-body">{{ t.first_comment.body }}</div>
       </div>
     </div>
   </div>
