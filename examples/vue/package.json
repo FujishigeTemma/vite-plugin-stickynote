@@ -1,5 +1,5 @@
 {
-  "name": "website",
+  "name": "@vite-plugin-stickynote/example-vue",
   "version": "0.0.0",
   "private": true,
   "type": "module",

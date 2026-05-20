@@ -1,0 +1,682 @@
+/* Shared widgets that render across multiple components (.sn-pin in
+   PinLayer + StalePinTray; .sn-badge / .sn-form* in several panels).
+   Kept global so all sites pick them up without per-component module
+   reaching. The `sn-` prefix prevents collision with host-page CSS;
+   `.sn-root` namespacing on every selector keeps the styles scoped to
+   our overlay subtree only. */
+
+.sn-root,
+.sn-root *,
+.sn-root *::before,
+.sn-root *::after {
+  box-sizing: border-box;
+}
+
+.sn-root .sn-pin {
+  position: fixed;
+  width: 28px;
+  height: 28px;
+  margin-left: -14px;
+  margin-top: -28px;
+  border: 2px solid transparent;
+  border-radius: 14px 14px 14px 0;
+  background: var(--sn-pin);
+  color: var(--sn-on-accent);
+  font-weight: 700;
+  font-size: 11px;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: var(--sn-shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+.sn-root .sn-pin.sn-pin-resolved {
+  background: var(--sn-pin-resolved);
+}
+.sn-root .sn-pin.sn-pin-stale {
+  background: var(--sn-pin-stale);
+  opacity: 0.6;
+}
+.sn-root .sn-pin.sn-pin-draggable {
+  cursor: grab;
+}
+.sn-root .sn-pin.sn-pin-dragging {
+  cursor: grabbing;
+  transform: scale(1.2);
+}
+.sn-root .sn-pin:hover,
+.sn-root .sn-pin.sn-pin-open {
+  transform: scale(1.2);
+}
+.sn-root .sn-pin.sn-pin-open {
+  border-color: var(--sn-pin-open-border);
+}
+
+/* Anchored pins follow their host element entirely via the browser's CSS
+   Anchor Positioning. `anchor()` reads the bound edge, `anchor-size()`
+   the bound size; the thread's stored 0..1 ratios scale within that box. */
+.sn-root .sn-pin-anchored {
+  left: calc(anchor(left) + anchor-size(width) * var(--x));
+  top: calc(anchor(top) + anchor-size(height) * var(--y));
+}
+/* Page-wide threads (no anchor) park in the top-right of the viewport,
+   matching the previous JS fallback position. */
+.sn-root .sn-pin-pagewide {
+  right: 12px;
+  top: 80px;
+  left: auto;
+}
+
+.sn-root .sn-badge {
+  background: var(--sn-warning-bg);
+  color: var(--sn-warning-text);
+  padding: 2px 6px;
+  border-radius: 9999px;
+  font-size: 11px;
+}
+.sn-root .sn-badge.sn-badge-danger {
+  background: var(--sn-danger);
+  color: oklch(99% 0 0);
+}
+
+.sn-root .sn-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sn-root .sn-form textarea {
+  font: inherit;
+  background: var(--sn-input-bg);
+  color: var(--sn-input-text);
+  border: 1px solid var(--sn-input-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  resize: vertical;
+  min-height: 70px;
+  width: 100%;
+}
+.sn-root .sn-form textarea::placeholder {
+  color: var(--sn-input-placeholder);
+}
+.sn-root .sn-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.sn-root .sn-form-actions button {
+  font: inherit;
+  border: 1px solid var(--sn-border);
+  background: var(--sn-surface);
+  color: var(--sn-text);
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.sn-root .sn-form-actions button:hover {
+  background: var(--sn-surface-raised);
+}
+.sn-root .sn-form-actions button.sn-primary {
+  background: var(--sn-accent);
+  color: var(--sn-on-accent);
+  border-color: var(--sn-accent);
+}
+.sn-root .sn-form-actions button.sn-primary:hover {
+  background: var(--sn-accent-hover);
+  border-color: var(--sn-accent-hover);
+}
+.sn-root .sn-form-actions button.sn-primary:disabled {
+  background: var(--sn-accent-disabled);
+  border-color: var(--sn-accent-disabled);
+  cursor: not-allowed;
+}
+
+/* ---- App root ---- */
+/* The single "escape the host page" stacking context for the entire plugin
+   UI. All overlays (highlights, pins, panel, composer, status bar) live
+   inside this root and rely on DOM order — not z-index — to settle their
+   relative stacking. The big z-index value here only exists to clear
+   arbitrary host-page z-indices; do not add more global z-indices
+   elsewhere in the plugin. */
+.sn-root {
+  position: fixed;
+  inset: 0;
+  isolation: isolate;
+  pointer-events: none;
+  z-index: 2147483000;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.sn-root .sn-composer-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ---- Inspector composer ---- */
+.sn-root .sn-composer-overlay {
+  position: fixed;
+  background: var(--sn-surface);
+  border: 1px solid var(--sn-border);
+  border-radius: 8px;
+  box-shadow: var(--sn-shadow-lg);
+  padding: 12px;
+  width: 320px;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sn-root .sn-composer-target {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+.sn-root .sn-composer-primary {
+  font-size: 11px;
+  color: var(--sn-text);
+  font-family: ui-monospace, monospace;
+}
+.sn-root .sn-composer-additional {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sn-root .sn-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--sn-accent-bg);
+  border: 1px solid var(--sn-accent-border);
+  border-radius: 4px;
+  padding: 2px 4px 2px 6px;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--sn-accent-text);
+}
+.sn-root .sn-chip-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sn-root .sn-chip-remove {
+  background: transparent;
+  border: 0;
+  color: var(--sn-accent-text);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 4px;
+}
+.sn-root .sn-composer-hint {
+  font-size: 10px;
+  color: var(--sn-text-subtle);
+}
+
+/* ---- Panel ---- */
+.sn-root .sn-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 360px;
+  max-width: 90vw;
+  height: 100vh;
+  background: var(--sn-surface);
+  border-left: 1px solid var(--sn-border);
+  box-shadow: var(--sn-shadow-lg);
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+.sn-root .sn-panel-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--sn-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sn-root .sn-panel-header h2 {
+  font-size: 14px;
+  margin: 0;
+}
+.sn-root .sn-panel-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.sn-root .sn-panel-actions button {
+  border: 1px solid var(--sn-border);
+  background: var(--sn-surface);
+  color: var(--sn-text);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+}
+.sn-root .sn-panel-actions button:hover {
+  background: var(--sn-surface-raised);
+}
+.sn-root .sn-panel-actions button.sn-active {
+  background: var(--sn-accent-bg);
+  border-color: var(--sn-accent-border);
+  color: var(--sn-accent-text);
+}
+.sn-root .sn-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ---- ThreadList ---- */
+.sn-root .sn-section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--sn-text-muted);
+  margin: 8px 0 4px;
+}
+.sn-root .sn-empty {
+  color: var(--sn-text-subtle);
+  font-style: italic;
+  padding: 8px 0;
+}
+.sn-root .sn-thread-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sn-root .sn-thread-card {
+  border: 1px solid var(--sn-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--sn-surface);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sn-root .sn-thread-card:hover {
+  border-color: var(--sn-accent-border);
+}
+.sn-root .sn-thread-card.sn-active-thread {
+  border-color: var(--sn-accent);
+  box-shadow: 0 0 0 2px var(--sn-accent-bg);
+}
+.sn-root .sn-thread-card.sn-thread-stale {
+  background: var(--sn-surface-raised);
+}
+.sn-root .sn-thread-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--sn-text-muted);
+}
+.sn-root .sn-thread-meta .sn-comp {
+  font-family: ui-monospace, monospace;
+  color: var(--sn-text);
+}
+.sn-root .sn-thread-body {
+  color: var(--sn-text);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* ---- ThreadDetail ---- */
+.sn-root .sn-thread-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sn-root .sn-detail-back {
+  background: transparent;
+  border: none;
+  color: var(--sn-text-muted);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+.sn-root .sn-detail-back:hover {
+  color: var(--sn-text);
+}
+.sn-root .sn-detail-meta {
+  font-size: 11px;
+  color: var(--sn-text-muted);
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.sn-root .sn-detail-meta a {
+  color: var(--sn-link);
+}
+.sn-root .sn-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sn-root .sn-detail-linked {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--sn-text-muted);
+}
+.sn-root .sn-detail-linked li {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.sn-root .sn-detail-linked a {
+  color: var(--sn-link);
+}
+
+/* ---- CommentItem ---- */
+.sn-root .sn-comment {
+  border: 1px solid var(--sn-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.sn-root .sn-comment.sn-deleted {
+  color: var(--sn-text-subtle);
+  font-style: italic;
+}
+.sn-root .sn-comment-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--sn-text-muted);
+  margin-bottom: 4px;
+}
+.sn-root .sn-comment-author {
+  font-weight: 600;
+  color: var(--sn-text);
+}
+.sn-root .sn-comment-actions {
+  display: flex;
+  gap: 6px;
+}
+.sn-root .sn-comment-actions button {
+  background: transparent;
+  border: none;
+  color: var(--sn-text-muted);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.sn-root .sn-comment-actions button:hover {
+  color: var(--sn-danger);
+}
+
+/* ---- SelectionBox ---- */
+.sn-root .sn-sel {
+  position: fixed;
+  left: anchor(left);
+  top: anchor(top);
+  width: anchor-size(width);
+  height: anchor-size(height);
+  border: 2px solid var(--sn-selection-border);
+  border-radius: 2px;
+  background-color: var(--sn-selection-bg);
+  box-sizing: border-box;
+  pointer-events: none;
+  transition: all 60ms linear;
+}
+.sn-root .sn-sel-label {
+  position: fixed;
+  left: anchor(left);
+  bottom: anchor(top);
+  margin-bottom: 2px;
+  position-try-fallbacks: --sn-sel-label-below;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 3px;
+  color: var(--sn-selection-label-fg);
+  background-color: var(--sn-selection-label-bg);
+  box-shadow: var(--sn-shadow-sm);
+  white-space: nowrap;
+  pointer-events: none;
+}
+@position-try --sn-sel-label-below {
+  bottom: auto;
+  top: anchor(bottom);
+  margin-bottom: 0;
+  margin-top: 2px;
+}
+
+/* ---- HoverHighlight ---- */
+.sn-root .sn-hover {
+  position: fixed;
+  position-anchor: --sn-hover;
+  left: anchor(left);
+  top: anchor(top);
+  width: anchor-size(width);
+  height: anchor-size(height);
+  background-color: var(--sn-hover-bg);
+  border: 2px solid var(--sn-accent);
+  border-radius: 2px;
+  box-sizing: border-box;
+  pointer-events: none;
+  transition: all 60ms linear;
+}
+.sn-root .sn-hover-card {
+  position: fixed;
+  position-anchor: --sn-hover;
+  /* Default: sit above the rect's top-left. Browser auto-flips below
+     when the card would clip the top of the viewport (the `position-try`
+     fallback). No JS measurement needed. */
+  left: anchor(left);
+  bottom: anchor(top);
+  margin-bottom: 4px;
+  position-try-fallbacks: --sn-hover-card-below;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  white-space: nowrap;
+  pointer-events: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--sn-tooltip-fg);
+  background-color: var(--sn-tooltip-bg);
+  box-shadow: var(--sn-shadow-sm);
+}
+@position-try --sn-hover-card-below {
+  bottom: auto;
+  top: anchor(bottom);
+  margin-bottom: 0;
+  margin-top: 4px;
+}
+.sn-root .sn-hover-name {
+  color: var(--sn-tooltip-name);
+}
+.sn-root .sn-hover-link {
+  color: var(--sn-tooltip-link);
+  text-decoration: underline;
+}
+
+/* ---- StalePinTray ---- */
+.sn-root .sn-stale-tray {
+  position: fixed;
+  top: 80px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: auto;
+  max-width: 220px;
+}
+/* Override the absolute positioning of `.sn-pin` so tray buttons stack. */
+.sn-root .sn-stale-tray .sn-pin {
+  position: relative;
+  margin: 0;
+}
+
+/* ---- StatusBar ---- */
+.sn-root .sn-statusbar {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  line-height: 1;
+  padding: 6px 10px;
+  background: var(--sn-surface-glass);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--sn-border);
+  border-radius: 9999px;
+  box-shadow: var(--sn-shadow-md);
+  pointer-events: auto;
+}
+.sn-root .sn-statusbar button {
+  font: inherit;
+  color: inherit;
+  border: none;
+  background: transparent;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  cursor: pointer;
+}
+.sn-root .sn-statusbar button:hover {
+  background: var(--sn-surface-raised);
+}
+.sn-root .sn-statusbar button.sn-active {
+  background: var(--sn-accent-bg);
+  color: var(--sn-accent-text);
+}
+.sn-root .sn-commit {
+  font-family: ui-monospace, monospace;
+  color: var(--sn-text-muted);
+  font-size: 11px;
+}
+
+/* ---- HelpButton ---- */
+.sn-root .sn-help-btn {
+  font: inherit;
+  color: var(--sn-text-muted);
+  border: none;
+  background: transparent;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  border-radius: 9999px;
+  cursor: pointer;
+}
+.sn-root .sn-help-btn:hover {
+  background: var(--sn-surface-raised);
+}
+.sn-root .sn-help-btn.sn-active {
+  background: var(--sn-accent-bg);
+  color: var(--sn-accent-text);
+}
+
+.sn-root .sn-help-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--sn-scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+.sn-root .sn-help-modal {
+  background: var(--sn-surface);
+  border: 1px solid var(--sn-border);
+  border-radius: 10px;
+  box-shadow: var(--sn-shadow-lg);
+  width: min(360px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 16px 18px;
+}
+.sn-root .sn-help-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.sn-root .sn-help-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sn-text);
+}
+.sn-root .sn-help-close {
+  font: inherit;
+  border: none;
+  background: transparent;
+  color: var(--sn-text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+.sn-root .sn-help-close:hover {
+  background: var(--sn-surface-raised);
+  color: var(--sn-text);
+}
+.sn-root .sn-help-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 12px;
+  margin: 0;
+}
+.sn-root .sn-help-list dt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.sn-root .sn-help-list dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  color: var(--sn-text);
+}
+.sn-root .sn-help-list kbd {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--sn-text);
+  background: var(--sn-surface-raised);
+  border: 1px solid var(--sn-border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 1px 6px;
+  line-height: 1.4;
+}
+.sn-root .sn-help-plus {
+  color: var(--sn-text-subtle);
+  font-size: 11px;
+}

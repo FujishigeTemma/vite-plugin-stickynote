@@ -1,0 +1,82 @@
+{
+  "name": "@vite-plugin-stickynote/react",
+  "version": "0.1.0",
+  "description": "In-app comment overlay for React dev environments — pin coordinates, threads, and replies, persisted via a Cloudflare Worker + D1. Targets React 19 + TanStack Router.",
+  "keywords": [
+    "annotation",
+    "comments",
+    "feedback",
+    "overlay",
+    "qa",
+    "react",
+    "react19",
+    "review",
+    "tanstack-router",
+    "vite",
+    "vite-plugin"
+  ],
+  "homepage": "https://github.com/FujishigeTemma/vite-plugin-stickynote#readme",
+  "bugs": {
+    "url": "https://github.com/FujishigeTemma/vite-plugin-stickynote/issues"
+  },
+  "license": "MIT",
+  "author": "FujishigeTemma",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FujishigeTemma/vite-plugin-stickynote.git",
+    "directory": "packages/react"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./client": {
+      "types": "./dist/client.d.mts",
+      "import": "./dist/client.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "dev": "vp pack --watch",
+    "check": "vp check",
+    "prepublishOnly": "vp run build"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.27.0",
+    "@babel/traverse": "^7.27.0",
+    "@babel/types": "^7.27.0",
+    "@tanstack/react-query": "^5.95.2",
+    "hono": "^4.12.18",
+    "magic-string": "^0.30.21",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@tanstack/react-router": "^1.95.0",
+    "@types/babel__traverse": "^7.20.6",
+    "@types/node": "catalog:",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vite-plugin-stickynote/worker": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "@tanstack/react-router": "^1.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "vite": "^5.0.0 || ^6.0.0 || ^7.0.0"
+  }
+}

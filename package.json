@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "ready": "vp fmt && vp lint && vp run test -r && vp run build -r",
-    "dev": "vp run website#dev",
+    "dev": "vp run example-react#dev",
+    "dev:vue": "vp run example-vue#dev",
     "prepare": "vp config"
   },
   "devDependencies": {
