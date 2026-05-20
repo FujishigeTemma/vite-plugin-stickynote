@@ -37,6 +37,16 @@ function overlayPlugin(
     // compose conditionally in `vite.config.ts`, e.g.
     // `mode !== "prod" && stickynote(...)`.
     apply: (_, { mode }) => mode !== "production",
+    // `vite build` forces `NODE_ENV=production` regardless of `--mode`, which
+    // collapses Vue's devtools hook calls (`devtoolsInitApp`, `app:init`) to
+    // dead code via the default `__VUE_PROD_DEVTOOLS__ = false`. The overlay's
+    // host-router discovery rides those events, so without this flip a
+    // `vite build --mode dev` bundle reports "no router" even when the host
+    // installs one correctly. Returning it from `config()` lets a consumer
+    // override win on conflict.
+    config() {
+      return { define: { __VUE_PROD_DEVTOOLS__: "true" } };
+    },
     resolveId(id) {
       if (id === VIRTUAL_MOUNT) return id;
       if (id.startsWith(VIRTUAL_PATH_PREFIX)) {
