@@ -1,3 +1,4 @@
+import { createClerkClient } from "@clerk/backend";
 import { clerkMiddleware, getAuth } from "@hono/clerk-auth";
 import type { MiddlewareHandler } from "hono";
 import type { AuthUser, Env, Variables } from "./types.ts";
@@ -39,20 +40,17 @@ export const requireAuth = (): MiddlewareHandler<{
     if (!auth?.userId) {
       return c.json({ error: "unauthorized" }, 401);
     }
-    const claims = (auth.sessionClaims ?? {}) as Record<string, unknown>;
+    // Default Clerk session JWTs carry no user profile, so reach for the
+    // `User.fullName` resource directly. One REST round-trip per authed
+    // request — fine for an annotation tool; revisit with a KV cache if the
+    // 5s thread-list poll becomes hot.
+    const clerk = createClerkClient({ secretKey: c.env.CLERK_SECRET_KEY });
+    const clerkUser = await clerk.users.getUser(auth.userId);
     const user: AuthUser = {
       sub: auth.userId,
-      name: pickName(claims) ?? auth.userId,
+      name: clerkUser.fullName ?? auth.userId,
     };
     c.set("user", user);
     await next();
   };
 };
-
-function pickName(payload: Record<string, unknown>): string | undefined {
-  for (const key of ["name", "full_name", "fullName", "username"]) {
-    const v = payload[key];
-    if (typeof v === "string" && v.length > 0) return v;
-  }
-  return undefined;
-}
