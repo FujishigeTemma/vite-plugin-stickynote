@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { closePanel, openThreadId, panelOpen, showResolved } from "../state.ts";
+import AgentToken from "./AgentToken.vue";
 import ThreadDetail from "./ThreadDetail.vue";
 import ThreadList from "./ThreadList.vue";
 
@@ -26,7 +27,10 @@ function toggleShowResolved(): void {
     </header>
     <div class="sn-panel-body">
       <ThreadDetail v-if="openThreadId" />
-      <ThreadList v-else />
+      <template v-else>
+        <ThreadList />
+        <AgentToken />
+      </template>
     </div>
   </aside>
 </template>

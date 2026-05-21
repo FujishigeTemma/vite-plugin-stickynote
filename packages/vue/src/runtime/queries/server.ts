@@ -63,4 +63,15 @@ export const serverQueries = {
         }),
     },
   },
+
+  agentToken: () =>
+    queryOptions({
+      queryKey: ["sn", "agent-token"] as const,
+      queryFn: async () => {
+        const res = await getAPIClient().api["agent-token"].$get();
+        if (!res.ok) throw new Error(`GET /api/agent-token → ${res.status}`);
+        return await res.json();
+      },
+      staleTime: Number.POSITIVE_INFINITY,
+    }),
 };

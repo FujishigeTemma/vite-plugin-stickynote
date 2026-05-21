@@ -63,3 +63,17 @@ export type CommentRow = {
 // Wire shapes exposed by routes; thread_id is implicit from the parent thread.
 export type Component = Omit<ComponentRow, "thread_id">;
 export type Comment = Omit<CommentRow, "thread_id">;
+
+export type AgentTokenRow = {
+  owner_sub: string;
+  owner_name: string;
+  token_hash: string;
+  created_at: string;
+  last_used_at: string | null;
+};
+
+export type UserCacheRow = {
+  sub: string;
+  full_name: string;
+  cached_at: string;
+};

@@ -94,6 +94,32 @@ export const serverMutations = {
     }),
   },
 
+  agentToken: {
+    generate: () => {
+      const mutationFn = async () => {
+        const res = await getAPIClient().api["agent-token"].$post();
+        if (!res.ok) throw new Error(`POST /api/agent-token → ${res.status}`);
+        return await res.json();
+      };
+      return {
+        mutationFn,
+        onSuccess: () => {
+          void queryClient.invalidateQueries({ queryKey: serverQueries.agentToken().queryKey });
+        },
+      };
+    },
+
+    revoke: () => ({
+      mutationFn: async () => {
+        const res = await getAPIClient().api["agent-token"].$delete();
+        if (!res.ok) throw new Error(`DELETE /api/agent-token → ${res.status}`);
+      },
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: serverQueries.agentToken().queryKey });
+      },
+    }),
+  },
+
   comments: {
     create: () => {
       type Vars = { threadId: string; body: string };

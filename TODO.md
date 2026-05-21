@@ -1,6 +1,3 @@
 - first_comment_body→スメル。リファクタ
 - build後はcomponent_nameが保存されておらずdivとかになってるかも？
-- 保存されたコメントにAIエージェントがアクセスする方法を検討する（CLIを実装するのか、エンドポイントを叩かせるのか、認証はどうするのかetc）
-  - 解決した時、resolveしたり、GitHub PRを紐づけられると良さそう
 - 利用側にVue Devtoolがある時の考慮漏れ
-- user_nameはuser.fullnameにするべき
