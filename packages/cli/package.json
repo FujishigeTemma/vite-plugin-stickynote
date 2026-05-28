@@ -1,0 +1,50 @@
+{
+  "name": "@vite-plugin-stickynote/cli",
+  "version": "0.1.1",
+  "description": "Command line client for Stickynote AI-agent workflows.",
+  "keywords": [
+    "ai-agent",
+    "cli",
+    "comments",
+    "feedback",
+    "stickynote"
+  ],
+  "homepage": "https://github.com/FujishigeTemma/vite-plugin-stickynote#readme",
+  "bugs": {
+    "url": "https://github.com/FujishigeTemma/vite-plugin-stickynote/issues"
+  },
+  "license": "MIT",
+  "author": "FujishigeTemma",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FujishigeTemma/vite-plugin-stickynote.git",
+    "directory": "packages/cli"
+  },
+  "bin": {
+    "stickynote": "./dist/index.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "check": "vp check",
+    "prepublishOnly": "vp pack"
+  },
+  "dependencies": {
+    "hono": "^4.12.18"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

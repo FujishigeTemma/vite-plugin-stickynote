@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@vite-plugin-stickynote/worker/app-type": ["../worker/src/index.ts"]
+    },
+    "types": ["node", "vite/client"]
+  },
+  "include": ["src"]
+}

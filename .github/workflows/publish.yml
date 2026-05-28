@@ -1,10 +1,11 @@
-name: Publish @vite-plugin-stickynote/vue
+name: Publish packages
 
 on:
   push:
     branches: [main]
     paths:
       - "packages/vue/**"
+      - "packages/cli/**"
       - ".github/workflows/publish.yml"
   workflow_dispatch:
 
@@ -14,6 +15,14 @@ jobs:
     permissions:
       contents: read
       id-token: write # required for npm provenance
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: "@vite-plugin-stickynote/vue"
+            directory: "packages/vue"
+          - package: "@vite-plugin-stickynote/cli"
+            directory: "packages/cli"
     steps:
       - uses: actions/checkout@v6
 
@@ -29,17 +38,20 @@ jobs:
 
       - name: Resolve publish action
         id: check
+        env:
+          PACKAGE_NAME: ${{ matrix.package }}
+          PACKAGE_DIR: ${{ matrix.directory }}
         run: |
           set -euo pipefail
-          LOCAL=$(node -p "require('./packages/vue/package.json').version")
-          LATEST=$(npm view @vite-plugin-stickynote/vue version 2>/dev/null || true)
-          echo "local=$LOCAL latest=${LATEST:-<none>}"
+          LOCAL=$(node -p "require('./${PACKAGE_DIR}/package.json').version")
+          LATEST=$(npm view "${PACKAGE_NAME}" version 2>/dev/null || true)
+          echo "package=${PACKAGE_NAME} local=$LOCAL latest=${LATEST:-<none>}"
           if [ -z "$LATEST" ]; then
             echo "No published version yet — the first release must be published manually."
             exit 0
           fi
           if [ "$LOCAL" = "$LATEST" ]; then
-            echo "Version $LOCAL already published; nothing to do."
+            echo "${PACKAGE_NAME}@${LOCAL} already published; nothing to do."
             exit 0
           fi
           NEWER=$(node -e '
@@ -59,7 +71,7 @@ jobs:
             process.stdout.write(cmp(a, b) > 0 ? "1" : "0");
           ' "$LOCAL" "$LATEST")
           if [ "$NEWER" != "1" ]; then
-            echo "Local $LOCAL is not newer than published $LATEST; skipping."
+            echo "Local ${PACKAGE_NAME}@${LOCAL} is not newer than published ${LATEST}; skipping."
             exit 0
           fi
           if [[ "$LOCAL" == *-* ]]; then
@@ -74,7 +86,7 @@ jobs:
       - name: Publish to npm (OIDC / Trusted Publisher)
         if: steps.check.outputs.publish == 'true'
         run: |
-          pnpm --filter @vite-plugin-stickynote/vue publish \
+          pnpm --filter "${{ matrix.package }}" publish \
             --access public \
             --no-git-checks \
             --tag "${{ steps.check.outputs.tag }}" \
@@ -83,4 +95,4 @@ jobs:
       - name: Summary
         if: steps.check.outputs.publish == 'true'
         run: |
-          echo "Published @vite-plugin-stickynote/vue@${{ steps.check.outputs.version }} (tag: ${{ steps.check.outputs.tag }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published ${{ matrix.package }}@${{ steps.check.outputs.version }} (tag: ${{ steps.check.outputs.tag }})" >> "$GITHUB_STEP_SUMMARY"

@@ -11,6 +11,9 @@
     "noUnusedLocals": true,
     "declaration": true,
     "noEmit": true,
+    "paths": {
+      "@vite-plugin-stickynote/worker/app-type": ["../worker/src/index.ts"]
+    },
     "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "isolatedModules": true,

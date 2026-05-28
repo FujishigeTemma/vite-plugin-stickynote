@@ -41,7 +41,7 @@ Without the conditional, `vite build --mode prod` ships the overlay. The README/
 Three paths in `requireAuth` (`packages/worker/src/auth.ts`), checked in this order:
 
 - **Local dev**: if `DEV_BEARER` is set in the worker env, accept a static bearer. Production never sets it.
-- **AI agent (PAT)**: if the bearer starts with `st_pat_`, look up `agent_tokens.token_hash` (SHA-256). One token per user; the Panel UI's "AI access" section issues/revokes. Author name surfaces as `<name> (AI)` so agent-posted comments are visually distinct. See `docs/ai-agents.md` for the agent-facing API guide.
+- **AI agent (PAT)**: if the bearer starts with `st_pat_`, look up `agent_tokens.token_hash` (SHA-256). One token per user; the Panel UI's "AI access" section issues/revokes. Author name surfaces as `<name> (AI)` so agent-posted comments are visually distinct. Run `vpx @vite-plugin-stickynote/cli usage` for the agent-facing API guide.
 - **Deployed (human)**: Clerk JWT. The user's `fullName` is cached in the `users` table (24h TTL) to avoid hitting `clerk.users.getUser()` on every poll.
 
 PAT inherits all the owner's permissions (read, comment, resolve, delete). Revoke from the Panel if leaked.
