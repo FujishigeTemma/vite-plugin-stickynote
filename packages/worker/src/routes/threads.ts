@@ -105,7 +105,7 @@ export const threadsRoutes = new Hono<{
   Variables: Variables;
 }>()
   .get("/", vValidator("query", ListThreadsQuerySchema), async (c) => {
-    const { route, includeResolved } = c.req.valid("query");
+    const { route, includeResolved, q } = c.req.valid("query");
     const where: string[] = [];
     const binds: unknown[] = [];
     if (route) {
@@ -114,6 +114,16 @@ export const threadsRoutes = new Hono<{
     }
     if (includeResolved !== "true") {
       where.push("t.status = 'open'");
+    }
+    const trimmedQ = q?.trim();
+    if (trimmedQ) {
+      // Escape LIKE metacharacters so a user typing `100%` or `_id` searches
+      // for the literal text instead of triggering wildcards.
+      const pattern = `%${trimmedQ.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+      where.push(
+        "EXISTS (SELECT 1 FROM comments c WHERE c.thread_id = t.id AND c.deleted_at IS NULL AND c.body LIKE ? ESCAPE '\\')",
+      );
+      binds.push(pattern);
     }
     const sql = `SELECT * FROM threads t ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY t.created_at DESC`;
     const { results } = await c.env.DB.prepare(sql)

@@ -96,4 +96,9 @@ function onDelete(): void {
 .sn-comment-actions button:hover {
   color: var(--sn-danger);
 }
+.sn-comment-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
 </style>

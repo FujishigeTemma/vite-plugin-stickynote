@@ -18,14 +18,20 @@ export const serverQueries = {
   threads: {
     all: ["sn", "threads"] as const,
 
-    list: (route: MaybeRefOrGetter<string>, includeResolved: MaybeRefOrGetter<boolean>) =>
+    list: (
+      route: MaybeRefOrGetter<string | undefined>,
+      includeResolved: MaybeRefOrGetter<boolean>,
+      q?: MaybeRefOrGetter<string | undefined>,
+    ) =>
       queryOptions({
-        queryKey: ["sn", "threads", "list", route, includeResolved] as const,
+        queryKey: ["sn", "threads", "list", route, includeResolved, q] as const,
         queryFn: async () => {
-          const query: { route?: string; includeResolved?: "true" } = {
-            route: toValue(route),
-          };
+          const query: { route?: string; includeResolved?: "true"; q?: string } = {};
+          const r = toValue(route);
+          if (r) query.route = r;
           if (toValue(includeResolved)) query.includeResolved = "true";
+          const search = toValue(q)?.trim();
+          if (search) query.q = search;
           const res = await getAPIClient().api.threads.$get({ query });
           if (!res.ok) throw new Error(`GET /api/threads → ${res.status}`);
           return (await res.json()).threads;

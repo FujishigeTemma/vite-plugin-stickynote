@@ -2,26 +2,36 @@
 import { useMutation, useQuery } from "@tanstack/vue-query";
 import { computed } from "vue";
 
-import { useThreadsList } from "../composables.ts";
 import { buildGithubUrl, componentKey } from "../inspector.ts";
 import { serverMutations } from "../mutations.ts";
 import { serverQueries } from "../queries/server.ts";
 import { queryClient } from "../query-client.ts";
-import { openThread, openThreadId, options } from "../state.ts";
+import { active, openThread, openThreadId, options } from "../state.ts";
 import CommentForm from "./CommentForm.vue";
 import CommentItem from "./CommentItem.vue";
 
-const { threads } = useThreadsList();
+// Fetch the thread by id directly (not via the list query) so it stays
+// rendered after the user resolves it — the list query drops resolved
+// threads unless `showResolved` is on, but the detail endpoint returns the
+// thread regardless of status. setStatus invalidates the `["sn","threads"]`
+// prefix, so this query refetches with the new status applied in place.
+// Poll on the same cadence as the list query so concurrent edits from
+// other collaborators surface without forcing the user to back out.
+const detailQ = useQuery(
+  {
+    ...serverQueries.threads.detail(openThreadId),
+    refetchInterval: () => (active.value ? 5000 : false),
+  },
+  queryClient,
+);
 const { data: comments } = useQuery(serverQueries.threads.comments.list(openThreadId), queryClient);
 
 const reply = useMutation(serverMutations.comments.create(), queryClient);
 const setStatus = useMutation(serverMutations.threads.setStatus(), queryClient);
 
-const thread = computed(() => {
-  const id = openThreadId.value;
-  if (!id) return null;
-  return threads.value.find((t) => t.id === id) ?? null;
-});
+const thread = computed(() => detailQ.data.value?.thread ?? null);
+const isLoading = computed(() => detailQ.isPending.value && !detailQ.data.value);
+const isError = computed(() => detailQ.isError.value && !detailQ.data.value);
 
 const primaryComponent = computed(() => thread.value?.components[0] ?? null);
 
@@ -68,31 +78,38 @@ function toggleResolved(): void {
 </script>
 
 <template>
-  <div v-if="thread" class="sn-thread-detail">
+  <div class="sn-thread-detail">
     <button class="sn-detail-back" type="button" @click="openThread(null)">
       ← back to threads
     </button>
-    <div class="sn-detail-meta">
-      <span>{{ componentLabel }}</span>
-      <a v-if="githubUrl" :href="githubUrl" target="_blank" rel="noopener">github</a>
-      <span v-if="thread.dirty_build" class="sn-badge">local changes</span>
-      <span v-if="viewportWarn" class="sn-badge">viewport differs</span>
+    <template v-if="thread">
+      <div class="sn-detail-meta">
+        <span>{{ componentLabel }}</span>
+        <a v-if="githubUrl" :href="githubUrl" target="_blank" rel="noopener">github</a>
+        <span v-if="thread.dirty_build" class="sn-badge">local changes</span>
+        <span v-if="viewportWarn" class="sn-badge">viewport differs</span>
+      </div>
+      <ul v-if="additionalLinks.length" class="sn-detail-linked">
+        <li v-for="link in additionalLinks" :key="link.key">
+          <span>{{ link.label }}</span>
+          <a v-if="link.url" :href="link.url" target="_blank" rel="noopener">github</a>
+        </li>
+      </ul>
+      <div class="sn-comments">
+        <CommentItem v-for="c in comments ?? []" :key="c.id" :comment="c" />
+      </div>
+      <CommentForm submit-label="Reply" @submit="onReply">
+        <template #leading>
+          <button type="button" @click="toggleResolved">
+            {{ thread.status === "open" ? "Resolve" : "Reopen" }}
+          </button>
+        </template>
+      </CommentForm>
+    </template>
+    <div v-else-if="isError" class="sn-detail-status">
+      Couldn't load this thread. It may have been deleted, or the worker is unreachable.
     </div>
-    <ul v-if="additionalLinks.length" class="sn-detail-linked">
-      <li v-for="link in additionalLinks" :key="link.key">
-        <span>{{ link.label }}</span>
-        <a v-if="link.url" :href="link.url" target="_blank" rel="noopener">github</a>
-      </li>
-    </ul>
-    <div class="sn-comments">
-      <CommentItem v-for="c in comments ?? []" :key="c.id" :comment="c" />
-    </div>
-    <CommentForm submit-label="Reply" @submit="onReply" />
-    <div class="sn-form-actions">
-      <button type="button" @click="toggleResolved">
-        {{ thread.status === "open" ? "Resolve" : "Reopen" }}
-      </button>
-    </div>
+    <div v-else-if="isLoading" class="sn-detail-status">loading…</div>
   </div>
 </template>
 
@@ -113,6 +130,10 @@ function toggleResolved(): void {
 }
 .sn-detail-back:hover {
   color: var(--sn-text);
+}
+.sn-detail-status {
+  color: var(--sn-text-muted);
+  font-style: italic;
 }
 .sn-detail-meta {
   font-size: 11px;

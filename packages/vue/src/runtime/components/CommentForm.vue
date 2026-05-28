@@ -33,6 +33,7 @@ function onKeydown(e: KeyboardEvent): void {
   <form ref="formRef" class="sn-form" @submit.prevent="submit">
     <textarea v-model="body" placeholder="Write a comment…" @keydown="onKeydown" />
     <div class="sn-form-actions">
+      <slot name="leading" />
       <button v-if="props.cancelable" type="button" @click="emit('cancel')">cancel</button>
       <button type="submit" class="sn-primary" :disabled="!body.trim()">
         {{ props.submitLabel ?? "Reply" }}

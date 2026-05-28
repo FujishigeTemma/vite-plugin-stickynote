@@ -43,6 +43,7 @@ export const UpdateThreadPositionSchema = v.object({
 export const ListThreadsQuerySchema = v.object({
   route: v.optional(v.string()),
   includeResolved: v.optional(v.picklist(["true", "false"])),
+  q: v.optional(v.pipe(v.string(), v.maxLength(200))),
 });
 
 export const CreateReplySchema = v.object({

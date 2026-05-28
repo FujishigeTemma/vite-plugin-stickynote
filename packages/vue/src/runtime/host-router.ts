@@ -11,6 +11,7 @@ type RouteSnap = { fullPath: string; matched: { path: string }[] };
 
 export type HostRouter = {
   currentRoute: { value: RouteSnap };
+  push: (to: string) => Promise<unknown> | void;
   afterEach: (cb: (to: RouteSnap) => void) => () => void;
 };
 

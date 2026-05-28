@@ -14,6 +14,9 @@ export const showResolved = ref(false);
 export const openThreadId = ref<string | null>(null);
 export const currentRoute = ref<string>(window.location.pathname);
 
+export type PanelTab = "page" | "all" | "settings";
+export const panelTab = ref<PanelTab>("page");
+
 // True once we've decided no host vue-router is reachable. Surfaced in the
 // status bar so a misconfigured host doesn't silently save threads under
 // stale or initial-pathname routes.
@@ -43,7 +46,14 @@ export function togglePanel(): void {
 
 export function openThread(id: string | null): void {
   openThreadId.value = id;
-  if (id) panelOpen.value = true;
+  if (id) {
+    panelOpen.value = true;
+    // The settings tab body would replace the thread list after the user
+    // backs out of the detail, leaving them on a screen they didn't ask
+    // for. Snap to the page tab so "back to threads" always lands on a
+    // thread list.
+    if (panelTab.value === "settings") panelTab.value = "page";
+  }
 }
 
 export function toggleActive(): void {

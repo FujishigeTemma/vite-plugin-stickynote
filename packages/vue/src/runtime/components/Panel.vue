@@ -1,21 +1,54 @@
 <script setup lang="ts">
-import { closePanel, openThreadId, panelOpen, showResolved } from "../state.ts";
+import {
+  closePanel,
+  openThread,
+  openThreadId,
+  panelOpen,
+  panelTab,
+  showResolved,
+} from "../state.ts";
+import type { PanelTab } from "../state.ts";
 import AgentToken from "./AgentToken.vue";
+import AllThreads from "./AllThreads.vue";
 import ThreadDetail from "./ThreadDetail.vue";
 import ThreadList from "./ThreadList.vue";
 
 function toggleShowResolved(): void {
   showResolved.value = !showResolved.value;
 }
+
+function selectTab(t: PanelTab): void {
+  // Switching tabs always exits the detail view; the same back action the
+  // user could press themselves, made implicit so the tab they clicked is
+  // what they actually see.
+  if (openThreadId.value) openThread(null);
+  panelTab.value = t;
+}
+
+const tabs: { id: PanelTab; label: string }[] = [
+  { id: "page", label: "this page" },
+  { id: "all", label: "all threads" },
+  { id: "settings", label: "settings" },
+];
 </script>
 
 <template>
   <aside v-if="panelOpen" class="sn-panel">
     <header class="sn-panel-header">
-      <h2>{{ openThreadId ? "Thread" : "Threads" }}</h2>
+      <h2>
+        {{
+          openThreadId
+            ? "Thread"
+            : panelTab === "all"
+              ? "All Threads"
+              : panelTab === "settings"
+                ? "Settings"
+                : "Threads"
+        }}
+      </h2>
       <div class="sn-panel-actions">
         <button
-          v-if="!openThreadId"
+          v-if="!openThreadId && panelTab !== 'settings'"
           type="button"
           :class="{ 'sn-active': showResolved }"
           @click="toggleShowResolved"
@@ -27,11 +60,22 @@ function toggleShowResolved(): void {
     </header>
     <div class="sn-panel-body">
       <ThreadDetail v-if="openThreadId" />
-      <template v-else>
-        <ThreadList />
-        <AgentToken />
-      </template>
+      <ThreadList v-else-if="panelTab === 'page'" />
+      <AllThreads v-else-if="panelTab === 'all'" />
+      <AgentToken v-else-if="panelTab === 'settings'" />
     </div>
+    <nav v-if="!openThreadId" class="sn-panel-tabs">
+      <button
+        v-for="t in tabs"
+        :key="t.id"
+        type="button"
+        class="sn-tab"
+        :class="{ 'sn-tab-active': panelTab === t.id }"
+        @click="selectTab(t.id)"
+      >
+        {{ t.label }}
+      </button>
+    </nav>
   </aside>
 </template>
 
@@ -92,5 +136,28 @@ function toggleShowResolved(): void {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+.sn-panel-tabs {
+  display: flex;
+  border-top: 1px solid var(--sn-border);
+  background: var(--sn-surface);
+}
+.sn-tab {
+  flex: 1;
+  font: inherit;
+  background: transparent;
+  border: none;
+  color: var(--sn-text-muted);
+  padding: 10px 8px;
+  cursor: pointer;
+  border-top: 2px solid transparent;
+  margin-top: -1px;
+}
+.sn-tab:hover {
+  color: var(--sn-text);
+}
+.sn-tab.sn-tab-active {
+  color: var(--sn-text);
+  border-top-color: var(--sn-accent);
 }
 </style>

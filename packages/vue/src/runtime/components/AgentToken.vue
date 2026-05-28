@@ -6,14 +6,23 @@ import { serverMutations } from "../mutations.ts";
 import { serverQueries } from "../queries/server.ts";
 import { queryClient } from "../query-client.ts";
 
-const { data: me } = useQuery(serverQueries.me(), queryClient);
+const meQ = useQuery(serverQueries.me(), queryClient);
 const { data: token } = useQuery(serverQueries.agentToken(), queryClient);
 const generate = useMutation(serverMutations.agentToken.generate(), queryClient);
 const revoke = useMutation(serverMutations.agentToken.revoke(), queryClient);
 
-// The dev-bearer escape hatch has no Clerk identity behind it, so token
-// management is irrelevant for local development.
-const visible = computed(() => me.value && me.value.sub !== "dev_user");
+// Loading and error are surfaced as their own states so a real Clerk user
+// doesn't see the "sign in with Clerk" hint while /api/me is still in
+// flight (or just failed). Treat undefined data + isPending as loading;
+// only show the dev-bearer hint when the response is definitively the
+// dev user.
+const me = computed(() => meQ.data.value);
+const isLoadingMe = computed(() => meQ.isPending.value && !meQ.data.value);
+const isErrorMe = computed(
+  () => !meQ.isPending.value && (meQ.isError.value || meQ.data.value == null),
+);
+const isDevUser = computed(() => me.value?.sub === "dev_user");
+const isClerkUser = computed(() => me.value != null && me.value.sub !== "dev_user");
 
 const justIssued = ref<string | null>(null);
 const copied = ref(false);
@@ -47,47 +56,58 @@ function fmt(iso: string | null | undefined): string {
 </script>
 
 <template>
-  <section v-if="visible" class="sn-agent-token">
+  <section class="sn-agent-token">
     <h3 class="sn-section-title">AI access</h3>
 
-    <div v-if="justIssued" class="sn-token-issued">
-      <p class="sn-token-hint">Copy this token now — it won't be shown again.</p>
-      <div class="sn-token-row">
-        <code class="sn-token">{{ justIssued }}</code>
-        <button type="button" @click="onCopy">{{ copied ? "copied" : "copy" }}</button>
-      </div>
-      <div class="sn-form-actions">
-        <button type="button" @click="onDismiss">done</button>
-      </div>
-    </div>
+    <p v-if="isLoadingMe" class="sn-token-hint">loading…</p>
 
-    <div v-else-if="token?.exists" class="sn-token-meta">
-      <div>Generated {{ fmt(token.created_at) }}</div>
-      <div>Last used {{ fmt(token.last_used_at) }}</div>
-      <div class="sn-form-actions">
+    <p v-else-if="isErrorMe" class="sn-token-hint">
+      Couldn't reach the worker to check your identity. Token management is unavailable until the
+      connection recovers.
+    </p>
+
+    <p v-else-if="isDevUser" class="sn-token-hint">
+      The local-dev bearer doesn't have a Clerk identity to attach a token to. Sign in with Clerk in
+      a deployed environment to issue an AI agent token.
+    </p>
+
+    <template v-if="isClerkUser">
+      <div v-if="justIssued" class="sn-token-issued">
+        <p class="sn-token-hint">Copy this token now — it won't be shown again.</p>
+        <div class="sn-token-row">
+          <code class="sn-token">{{ justIssued }}</code>
+          <button type="button" @click="onCopy">{{ copied ? "copied" : "copy" }}</button>
+        </div>
+        <div class="sn-form-actions">
+          <button type="button" @click="onDismiss">done</button>
+        </div>
+      </div>
+
+      <div v-else-if="token?.exists" class="sn-token-meta">
+        <div>Generated {{ fmt(token.created_at) }}</div>
+        <div>Last used {{ fmt(token.last_used_at) }}</div>
+        <div class="sn-form-actions">
+          <button type="button" :disabled="generate.isPending.value" @click="onGenerate">
+            regenerate
+          </button>
+          <button type="button" :disabled="revoke.isPending.value" @click="onRevoke">revoke</button>
+        </div>
+      </div>
+
+      <div v-else class="sn-token-empty">
+        <p class="sn-token-hint">
+          Issue a token to let an AI agent read and resolve threads via the HTTP API.
+        </p>
         <button type="button" :disabled="generate.isPending.value" @click="onGenerate">
-          regenerate
+          generate token
         </button>
-        <button type="button" :disabled="revoke.isPending.value" @click="onRevoke">revoke</button>
       </div>
-    </div>
-
-    <div v-else class="sn-token-empty">
-      <p class="sn-token-hint">
-        Issue a token to let an AI agent read and resolve threads via the HTTP API.
-      </p>
-      <button type="button" :disabled="generate.isPending.value" @click="onGenerate">
-        generate token
-      </button>
-    </div>
+    </template>
   </section>
 </template>
 
 <style scoped>
 .sn-agent-token {
-  border-top: 1px solid var(--sn-border);
-  padding-top: 12px;
-  margin-top: 4px;
   display: flex;
   flex-direction: column;
   gap: 6px;
